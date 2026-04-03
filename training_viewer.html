@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uma Training Viewer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --accent: #e94560;
+    --accent2: #533483;
+    --text: #eee;
+    --text-dim: #999;
+    --rainbow: linear-gradient(90deg, #ff6b6b, #ffa36b, #ffd56b, #6bffa3, #6bd5ff, #a36bff, #ff6bce);
+    --border: #2a2a4a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .header .meta {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-left: auto;
+  }
+
+  /* Upload area */
+  .upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: 40px;
+  }
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 60px 80px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    max-width: 500px;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(233, 69, 96, 0.05);
+  }
+  .drop-zone h2 { font-size: 18px; margin-bottom: 8px; }
+  .drop-zone p { color: var(--text-dim); font-size: 14px; }
+  .drop-zone input { display: none; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+  }
+  .tab {
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Run selector bar */
+  .run-selector-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .run-selector-bar label {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .run-selector-bar select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    flex: 1;
+    max-width: 400px;
+  }
+  .run-selector-bar select:focus { border-color: var(--accent); }
+  .run-selector-bar .add-more-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .run-selector-bar .add-more-btn:hover { border-color: var(--accent); }
+
+  /* Content */
+  .content { padding: 24px; display: none; }
+  .content.active { display: block; }
+
+  /* Dashboard */
+  .run-info {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .run-info h3 { font-size: 16px; margin-bottom: 12px; color: var(--accent); }
+  .run-info-top {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .run-info-top .run-info-item { font-size: 13px; }
+  .run-info-top .run-info-item span { color: var(--text-dim); }
+  .support-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+  }
+  .support-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 6px 12px 6px 6px;
+    font-size: 12px;
+  }
+  .support-pill img {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .support-pill-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .support-type-tag {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    align-self: flex-start;
+  }
+  .support-type-speed { background: #1a3a4a; color: #6bd5ff; }
+  .support-type-stamina { background: #3a2a1a; color: #ffa36b; }
+  .support-type-power { background: #3a1a1a; color: #ff6b6b; }
+  .support-type-guts { background: #3a3a1a; color: #ffd56b; }
+  .support-type-wisdom { background: #1a3a2a; color: #6bffa3; }
+  .support-type-friend { background: #2a1a3a; color: #a36bff; }
+  .support-type-group { background: #3a1a2a; color: #ff6bce; }
+  .support-type-unknown { background: #2a2a2a; color: #999; }
+  .support-name { flex: 1; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-card .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .stat-card .delta { font-size: 12px; color: #6bffa3; margin-top: 2px; }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-card h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-dim); }
+
+  .rainbow-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .rainbow-item {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+  .rainbow-item .type { font-size: 12px; color: var(--text-dim); }
+  .rainbow-item .count {
+    font-size: 24px;
+    font-weight: 700;
+    background: var(--rainbow);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .rainbow-item .total { font-size: 11px; color: var(--text-dim); }
+
+  /* Turn Explorer */
+  .explorer-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .explorer-controls input, .explorer-controls select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+  .explorer-controls input:focus, .explorer-controls select:focus {
+    border-color: var(--accent);
+  }
+  .explorer-controls input { flex: 1; min-width: 200px; }
+  .explorer-controls label {
+    font-size: 13px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .explorer-controls input[type="checkbox"] {
+    flex: unset;
+    min-width: unset;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+  }
+
+  .turn-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .turn-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .turn-table th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .turn-table td {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .turn-table tr:hover td { background: rgba(233, 69, 96, 0.05); }
+  .turn-table tr.rainbow-row td {
+    background: rgba(255, 213, 107, 0.07);
+  }
+  .turn-table tr.rainbow-row:hover td {
+    background: rgba(255, 213, 107, 0.12);
+  }
+  .rainbow-badge {
+    background: var(--rainbow);
+    color: #000;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .action-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .action-Training { background: #1a4a2e; color: #6bffa3; }
+  .action-Race { background: #4a1a1a; color: #ff6b6b; }
+  .action-Event { background: #1a2a4a; color: #6bd5ff; }
+  .action-SkillHint { background: #3a1a4a; color: #a36bff; }
+  .action-BuySkill { background: #4a3a1a; color: #ffd56b; }
+  .action-Rest { background: #2a2a2a; color: #999; }
+  .action-Outing { background: #1a3a3a; color: #6bffe0; }
+  .action-Start { background: #2a2a3a; color: #aaa; }
+  .action-AfterRace { background: #4a2a1a; color: #ffa36b; }
+  .action-Infirmary { background: #3a1a2a; color: #ff6bce; }
+  .positive { color: #6bffa3; }
+  .negative { color: #ff6b6b; }
+
+  .turn-detail {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .turn-detail.active { display: block; }
+  .turn-detail h3 { margin-bottom: 12px; }
+
+  /* Multi-run summary */
+  .summary-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .summary-section h3 { font-size: 16px; margin-bottom: 16px; color: var(--accent); }
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .summary-table th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+  }
+  .summary-table td {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .summary-table tr:hover td { background: rgba(233, 69, 96, 0.05); }
+  .avg-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .avg-stat-card {
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .avg-stat-card .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .avg-stat-card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .avg-stat-card .range { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  @media (max-width: 768px) {
+    .charts-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div id="header" class="header">
+  <h1 id="headerTitle">Uma Training Viewer</h1>
+  <div class="meta" id="headerMeta"></div>
+</div>
+
+<div id="uploadSection" class="upload-area">
+  <div class="drop-zone" id="dropZone">
+    <h2 id="dropZoneTitle">Load Training CSV</h2>
+    <p id="dropZoneHint">Drop CSV files here or click to browse (multi-select supported)</p>
+    <input type="file" id="fileInput" accept=".csv" multiple>
+  </div>
+</div>
+
+<div id="appSection" style="display:none;">
+  <div id="runSelectorBar" class="run-selector-bar">
+    <label for="runSelector">Run:</label>
+    <select id="runSelector"></select>
+    <button class="add-more-btn" id="addMoreBtn">+ Add More</button>
+    <input type="file" id="addMoreInput" accept=".csv" multiple style="display:none;">
+  </div>
+
+  <div id="tabBar" class="tabs">
+    <div id="tabDashboard" class="tab active" data-tab="dashboard">Dashboard</div>
+    <div id="tabExplorer" class="tab" data-tab="explorer">Turn Explorer</div>
+    <div id="tabMultiRun" class="tab" data-tab="multirun" style="display:none;">Multi-Run Summary</div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="content active" id="dashboard">
+    <div class="run-info" id="runInfo"></div>
+
+    <div class="stats-grid" id="finalStats"></div>
+
+    <div id="chartsGrid" class="charts-grid">
+      <div id="statChartCard" class="chart-card full">
+        <h3 id="statChartTitle">Stat Growth Over Turns</h3>
+        <canvas id="statChart"></canvas>
+      </div>
+      <div id="actionChartCard" class="chart-card">
+        <h3 id="actionChartTitle">Action Distribution</h3>
+        <canvas id="actionChart"></canvas>
+      </div>
+      <div id="rainbowCard" class="chart-card">
+        <h3 id="rainbowTitle">Rainbow Trainings</h3>
+        <div class="rainbow-summary" id="rainbowSummary"></div>
+        <canvas id="rainbowChart" style="margin-top:16px;"></canvas>
+      </div>
+      <div id="energyChartCard" class="chart-card">
+        <h3 id="energyChartTitle">Energy Over Turns</h3>
+        <canvas id="energyChart"></canvas>
+      </div>
+      <div id="skillPtChartCard" class="chart-card">
+        <h3 id="skillPtChartTitle">Skill Points Over Turns</h3>
+        <canvas id="skillPtChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Explorer -->
+  <div class="content" id="explorer">
+    <div id="explorerControls" class="explorer-controls">
+      <input type="text" id="searchInput" placeholder="Search actions, skills, partners...">
+      <select id="actionFilter">
+        <option value="">All Actions</option>
+      </select>
+      <label id="rainbowOnlyLabel">
+        <input type="checkbox" id="rainbowOnly">
+        Rainbow only
+      </label>
+    </div>
+    <div id="turnTableWrap" class="turn-table-wrap" style="max-height:70vh;overflow-y:auto;">
+      <table id="turnTable" class="turn-table">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Multi-Run Summary -->
+  <div class="content" id="multirun">
+    <div class="summary-section" id="multiRunOverview">
+      <h3>Overview</h3>
+      <div id="multiRunOverviewContent"></div>
+    </div>
+    <div class="summary-section" id="multiRunAvgStats">
+      <h3>Average Final Stats</h3>
+      <div class="avg-stat-grid" id="multiRunAvgStatsGrid"></div>
+    </div>
+    <div class="summary-section" id="multiRunRainbow">
+      <h3>Rainbow Rate Across Runs</h3>
+      <canvas id="multiRunRainbowChart"></canvas>
+    </div>
+    <div class="summary-section" id="multiRunTable">
+      <h3>Run Comparison</h3>
+      <div style="overflow-x:auto;">
+        <table class="summary-table" id="multiRunCompTable">
+          <thead id="multiRunCompHead"></thead>
+          <tbody id="multiRunCompBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STAT_COLORS = {
+  SPD: '#6bd5ff',
+  STA: '#ffa36b',
+  POW: '#ff6b6b',
+  GUT: '#ffd56b',
+  INT: '#6bffa3'
+};
+
+// Global localization
+const LOC = {
+  'INT': 'WIT',
+  'SKLPT': 'SP',
+  'ERG': 'EN',
+  'MOT': 'MOOD',
+  '\u0394INT': '\u0394WIT',
+  '\u0394SKLPT': '\u0394SP',
+  '\u0394ERG': '\u0394EN',
+  '\u0394MOT': '\u0394MOOD',
+  'Wisdom': 'Wit',
+  'Intelligence': 'Wit',
+  'Very High': 'Great',
+  'High': 'Good',
+  'Normal': 'Normal',
+  'Low': 'Bad',
+  'Very Low': 'Awful',
+};
+function loc(s) { return LOC[s] || s; }
+
+// Multi-run data store
+const allRuns = []; // Array of { name, headers, COL, rows }
+let activeRunIndex = 0;
+let dashboardCharts = [];
+
+// File handling
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const addMoreBtn = document.getElementById('addMoreBtn');
+const addMoreInput = document.getElementById('addMoreInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => { if (e.target.files.length) loadFiles(e.target.files); });
+
+addMoreBtn.addEventListener('click', () => addMoreInput.click());
+addMoreInput.addEventListener('change', e => { if (e.target.files.length) loadFiles(e.target.files); });
+
+function loadFiles(fileList) {
+  const files = Array.from(fileList).filter(f => f.name.endsWith('.csv'));
+  if (!files.length) return;
+
+  let loaded = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const run = parseCSV(e.target.result, file.name);
+      allRuns.push(run);
+      loaded++;
+      if (loaded === files.length) {
+        activeRunIndex = allRuns.length - 1;
+        onRunsChanged();
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+function parseCSV(text, fileName) {
+  const lines = text.split('\n').filter(l => l.trim());
+  const headers = parseCSVLine(lines[0]);
+  const COL = {};
+  headers.forEach((h, i) => COL[h] = i);
+  const rows = lines.slice(1).map(parseCSVLine);
+
+  // Derive a display name
+  let name = fileName.replace(/\.csv$/i, '').replace(/_/g, ' ');
+  return { name, headers, COL, rows };
+}
+
+function parseCSVLine(line) {
+  const cells = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') inQuotes = false;
+      else current += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ',') { cells.push(current.trim()); current = ''; }
+      else current += ch;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function col(row, name, runCOL) { return runCOL[name] !== undefined ? row[runCOL[name]] || '' : ''; }
+function num(row, name, runCOL) { const v = col(row, name, runCOL); return v === '' ? 0 : parseInt(v, 10) || 0; }
+
+function onRunsChanged() {
+  document.getElementById('uploadSection').style.display = 'none';
+  document.getElementById('appSection').style.display = 'block';
+
+  // Update run selector
+  const sel = document.getElementById('runSelector');
+  sel.innerHTML = allRuns.map((r, i) => `<option value="${i}">${r.name}</option>`).join('');
+  sel.value = activeRunIndex;
+
+  // Show/hide multi-run tab
+  document.getElementById('tabMultiRun').style.display = allRuns.length > 1 ? '' : 'none';
+
+  renderActiveRun();
+}
+
+document.getElementById('runSelector').addEventListener('change', e => {
+  activeRunIndex = parseInt(e.target.value);
+  renderActiveRun();
+});
+
+function renderActiveRun() {
+  const run = allRuns[activeRunIndex];
+  if (!run) return;
+
+  document.getElementById('headerMeta').textContent =
+    `${col(run.rows[0], 'Chara', run.COL)} — ${col(run.rows[0], 'Scenario', run.COL)}`;
+
+  renderDashboard(run);
+  renderExplorer(run);
+  if (allRuns.length > 1) renderMultiRunSummary();
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  });
+});
+
+function renderDashboard(run) {
+  const { rows, COL: runCOL } = run;
+  if (!rows.length) return;
+
+  // Destroy old charts
+  dashboardCharts.forEach(c => c.destroy());
+  dashboardCharts = [];
+
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+
+  // Run info
+  const runInfo = document.getElementById('runInfo');
+
+  function parseSupport(raw) {
+    const match = raw.match(/^(\d+)\s*-\s*((?:SSR|SR|R)\s+)?(\w+)\s+(.+)$/);
+    if (match) {
+      return { id: match[1], rarity: (match[2] || '').trim(), type: match[3], name: match[4] };
+    }
+    const idMatch = raw.match(/^(\d+)/);
+    return { id: idMatch ? idMatch[1] : '', rarity: '', type: 'Unknown', name: raw.replace(/^\d+\s*-\s*/, '') };
+  }
+
+  function supportTypeClass(type) {
+    const t = type.toLowerCase();
+    if (['speed'].includes(t)) return 'speed';
+    if (['stamina'].includes(t)) return 'stamina';
+    if (['power'].includes(t)) return 'power';
+    if (['guts'].includes(t)) return 'guts';
+    if (['wisdom'].includes(t)) return 'wisdom';
+    if (['friend'].includes(t)) return 'friend';
+    if (['group'].includes(t)) return 'group';
+    return 'unknown';
+  }
+
+  const supports = [1,2,3,4,5,6].map(i => parseSupport(col(first, 'Support ' + i, runCOL)));
+
+  runInfo.innerHTML = `
+    <h3>Run Info</h3>
+    <div class="run-info-top">
+      <div class="run-info-item"><span>Scenario:</span> ${col(first, 'Scenario', runCOL)}</div>
+      <div class="run-info-item"><span>Character:</span> ${col(first, 'Chara', runCOL)}</div>
+      <div class="run-info-item"><span>Turns:</span> ${col(last, 'Turn', runCOL)}</div>
+    </div>
+    <div class="support-cards-grid">
+      ${supports.map(s => `
+        <div class="support-pill">
+          <img src="../umamusume-tierlist/public/cardImages/support_card_s_${s.id}.png"
+               onerror="this.style.display='none'"
+               alt="${s.name}">
+          <div class="support-pill-info">
+            <span class="support-type-tag support-type-${supportTypeClass(s.type)}">${loc(s.type)}</span>
+            <span class="support-name">${s.rarity ? s.rarity + ' ' : ''}${s.name}</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Final stats
+  const stats = ['SPD', 'STA', 'POW', 'GUT', 'INT', 'SKLPT', 'FAN'];
+  const statsContainer = document.getElementById('finalStats');
+  statsContainer.innerHTML = stats.map(s => {
+    const finalVal = num(last, s, runCOL);
+    return `<div class="stat-card">
+      <div class="label">${loc(s)}</div>
+      <div class="value" style="color:${STAT_COLORS[s] || '#fff'}">${finalVal.toLocaleString()}</div>
+    </div>`;
+  }).join('');
+
+  // Stat growth chart
+  const trainingRows = rows.filter(r => num(r, 'Turn', runCOL) > 0);
+  const turns = trainingRows.map(r => num(r, 'Turn', runCOL));
+  const uniqueTurns = [...new Set(turns)];
+  const turnData = {};
+  trainingRows.forEach(r => { turnData[num(r, 'Turn', runCOL)] = r; });
+  const orderedTurns = uniqueTurns.sort((a, b) => a - b);
+
+  dashboardCharts.push(new Chart(document.getElementById('statChart'), {
+    type: 'line',
+    data: {
+      labels: orderedTurns,
+      datasets: ['SPD', 'STA', 'POW', 'GUT', 'INT'].map(s => ({
+        label: loc(s),
+        data: orderedTurns.map(t => num(turnData[t], s, runCOL)),
+        borderColor: STAT_COLORS[s],
+        backgroundColor: STAT_COLORS[s] + '22',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        fill: false
+      }))
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#eee', usePointStyle: true, pointStyle: 'line' } } },
+      scales: {
+        x: { title: { display: true, text: 'Turn', color: '#999' }, ticks: { color: '#999' }, grid: { color: '#2a2a4a' } },
+        y: { title: { display: true, text: 'Stat Value', color: '#999' }, ticks: { color: '#999' }, grid: { color: '#2a2a4a' } }
+      }
+    }
+  }));
+
+  // Action distribution
+  const actionCounts = {};
+  rows.forEach(r => {
+    const a = col(r, 'Action', runCOL);
+    if (a) actionCounts[a] = (actionCounts[a] || 0) + 1;
+  });
+  const actionLabels = Object.keys(actionCounts).sort((a, b) => actionCounts[b] - actionCounts[a]);
+  const actionColors = ['#6bd5ff', '#ffa36b', '#ff6b6b', '#ffd56b', '#6bffa3', '#a36bff', '#ff6bce', '#999', '#e94560', '#533483'];
+
+  dashboardCharts.push(new Chart(document.getElementById('actionChart'), {
+    type: 'doughnut',
+    data: {
+      labels: actionLabels,
+      datasets: [{
+        data: actionLabels.map(a => actionCounts[a]),
+        backgroundColor: actionLabels.map((_, i) => actionColors[i % actionColors.length]),
+        borderColor: '#1a1a2e',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#eee', font: { size: 11 } }, position: 'right' } }
+    }
+  }));
+
+  // Rainbow summary
+  const rainbowCounts = {};
+  const multiRainbowCounts = {};
+  const trainingCounts = {};
+  rows.forEach(r => {
+    if (col(r, 'Action', runCOL) === 'Training') {
+      const type = col(r, 'Text', runCOL);
+      const rc = parseInt(col(r, 'Rainbow', runCOL)) || 0;
+      trainingCounts[type] = (trainingCounts[type] || 0) + 1;
+      if (rc > 0) {
+        rainbowCounts[type] = (rainbowCounts[type] || 0) + 1;
+      }
+      if (rc > 1) {
+        multiRainbowCounts[type] = (multiRainbowCounts[type] || 0) + 1;
+      }
+    }
+  });
+
+  const totalRainbow = Object.values(rainbowCounts).reduce((a, b) => a + b, 0);
+  const totalMulti = Object.values(multiRainbowCounts).reduce((a, b) => a + b, 0);
+  const totalTraining = Object.values(trainingCounts).reduce((a, b) => a + b, 0);
+
+  const rainbowSummary = document.getElementById('rainbowSummary');
+  rainbowSummary.innerHTML =
+    `<div class="rainbow-item">
+      <div class="type">Total</div>
+      <div class="count">${totalRainbow}</div>
+      <div class="total">/ ${totalTraining} trainings</div>
+    </div>
+    <div class="rainbow-item">
+      <div class="type">Multi</div>
+      <div class="count">${totalMulti}</div>
+      <div class="total">/ ${totalRainbow} rainbows</div>
+    </div>` +
+    Object.keys(trainingCounts).sort().map(type => `
+      <div class="rainbow-item">
+        <div class="type">${loc(type)}</div>
+        <div class="count">${rainbowCounts[type] || 0}${multiRainbowCounts[type] ? ` <small>(${multiRainbowCounts[type]}x multi)</small>` : ''}</div>
+        <div class="total">/ ${trainingCounts[type]}</div>
+      </div>
+    `).join('');
+
+  // Rainbow rate chart
+  const rainbowTypes = Object.keys(trainingCounts).sort();
+  const rainbowTypeColors = {
+    Speed: '#6bd5ff', Stamina: '#ffa36b', Power: '#ff6b6b',
+    Guts: '#ffd56b', Wisdom: '#6bffa3', Wit: '#6bffa3'
+  };
+  dashboardCharts.push(new Chart(document.getElementById('rainbowChart'), {
+    type: 'bar',
+    data: {
+      labels: rainbowTypes.map(loc),
+      datasets: [
+        {
+          label: 'Rainbow',
+          data: rainbowTypes.map(t => rainbowCounts[t] || 0),
+          backgroundColor: rainbowTypes.map(t => rainbowTypeColors[t] || '#a36bff'),
+          borderRadius: 4
+        },
+        {
+          label: 'Normal',
+          data: rainbowTypes.map(t => (trainingCounts[t] || 0) - (rainbowCounts[t] || 0)),
+          backgroundColor: rainbowTypes.map(t => (rainbowTypeColors[t] || '#a36bff') + '33'),
+          borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#eee', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            afterBody: (items) => {
+              const idx = items[0].dataIndex;
+              const type = rainbowTypes[idx];
+              const total = trainingCounts[type] || 0;
+              const rb = rainbowCounts[type] || 0;
+              const pct = total > 0 ? Math.round(rb / total * 100) : 0;
+              return `Rainbow rate: ${pct}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: '#999', stepSize: 1 },
+          grid: { color: '#2a2a4a' }
+        },
+        y: {
+          stacked: true,
+          ticks: { color: '#eee' },
+          grid: { display: false }
+        }
+      }
+    }
+  }));
+
+  // Energy chart
+  dashboardCharts.push(new Chart(document.getElementById('energyChart'), {
+    type: 'line',
+    data: {
+      labels: orderedTurns,
+      datasets: [{
+        label: 'Energy',
+        data: orderedTurns.map(t => num(turnData[t], 'ERG', runCOL)),
+        borderColor: '#e94560',
+        backgroundColor: '#e9456022',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#999' }, grid: { color: '#2a2a4a' } },
+        y: { ticks: { color: '#999' }, grid: { color: '#2a2a4a' } }
+      }
+    }
+  }));
+
+  // Skill pt chart
+  dashboardCharts.push(new Chart(document.getElementById('skillPtChart'), {
+    type: 'line',
+    data: {
+      labels: orderedTurns,
+      datasets: [{
+        label: loc('SP'),
+        data: orderedTurns.map(t => num(turnData[t], 'SKLPT', runCOL)),
+        borderColor: '#a36bff',
+        backgroundColor: '#a36bff22',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#999' }, grid: { color: '#2a2a4a' } },
+        y: { ticks: { color: '#999' }, grid: { color: '#2a2a4a' } }
+      }
+    }
+  }));
+}
+
+let explorerListeners = false;
+function renderExplorer(run) {
+  const { rows, COL: runCOL } = run;
+
+  const displayCols = ['Turn', 'Action', 'Text', 'Value', 'Rainbow', 'Training Partners',
+    'SPD', 'STA', 'POW', 'GUT', 'INT', 'SKLPT', 'ERG', 'MOT',
+    '\u0394SPD', '\u0394STA', '\u0394POW', '\u0394GUT', '\u0394INT', '\u0394SKLPT', '\u0394ERG',
+    'Skills Added', 'Skill Hints Added', 'Statuses Added'];
+
+  const visibleCols = displayCols.filter(c => runCOL[c] !== undefined);
+
+  document.getElementById('tableHead').innerHTML =
+    '<tr>' + visibleCols.map(c => `<th>${loc(c)}</th>`).join('') + '</tr>';
+
+  // Populate action filter
+  const actionSet = new Set(rows.map(r => col(r, 'Action', runCOL)).filter(Boolean));
+  const actionFilter = document.getElementById('actionFilter');
+  actionFilter.innerHTML = '<option value="">All Actions</option>';
+  [...actionSet].sort().forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    actionFilter.appendChild(opt);
+  });
+
+  function renderRows() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const actionF = actionFilter.value;
+    const rainbowOnly = document.getElementById('rainbowOnly').checked;
+
+    const filtered = rows.filter(r => {
+      if (actionF && col(r, 'Action', runCOL) !== actionF) return false;
+      if (rainbowOnly && !(parseInt(col(r, 'Rainbow', runCOL)) > 0)) return false;
+      if (search) {
+        const rowText = r.join(' ').toLowerCase();
+        if (!rowText.includes(search)) return false;
+      }
+      return true;
+    });
+
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = filtered.map(r => {
+      const isRainbow = parseInt(col(r, 'Rainbow', runCOL)) > 0;
+      const action = col(r, 'Action', runCOL);
+      return `<tr class="${isRainbow ? 'rainbow-row' : ''}">` +
+        visibleCols.map(c => {
+          let val = col(r, c, runCOL);
+          if (c === 'Text' && val) {
+            val = loc(val);
+          } else if (c === 'MOT' && val) {
+            val = loc(val);
+          } else if (c === 'Action' && val) {
+            val = `<span class="action-badge action-${val}">${val}</span>`;
+          } else if (c === 'Rainbow' && parseInt(val) > 0) {
+            const rc = parseInt(val);
+            val = rc > 1
+              ? `<span class="rainbow-badge">RAINBOW x${rc}</span>`
+              : `<span class="rainbow-badge">RAINBOW</span>`;
+          } else if (c.startsWith('\u0394') && val) {
+            const n = parseInt(val, 10);
+            if (n > 0) val = `<span class="positive">+${n}</span>`;
+            else if (n < 0) val = `<span class="negative">${n}</span>`;
+          } else if (c === 'Training Partners' && val) {
+            val = val.replace(/\|/g, ', ');
+          }
+          return `<td>${val}</td>`;
+        }).join('') + '</tr>';
+    }).join('');
+  }
+
+  renderRows();
+
+  // Only attach listeners once
+  if (!explorerListeners) {
+    explorerListeners = true;
+    document.getElementById('searchInput').addEventListener('input', () => renderActiveRun());
+    document.getElementById('actionFilter').addEventListener('change', () => renderActiveRun());
+    document.getElementById('rainbowOnly').addEventListener('change', () => renderActiveRun());
+  }
+}
+
+let multiRunChart = null;
+function renderMultiRunSummary() {
+  if (allRuns.length < 2) return;
+
+  // Compute per-run stats
+  const runStats = allRuns.map(run => {
+    const { rows, COL: runCOL, name } = run;
+    const last = rows[rows.length - 1];
+    const first = rows[0];
+
+    const stats = {};
+    ['SPD', 'STA', 'POW', 'GUT', 'INT', 'SKLPT', 'FAN'].forEach(s => {
+      stats[s] = num(last, s, runCOL);
+    });
+
+    let totalTrainings = 0, totalRainbows = 0, totalMulti = 0;
+    const rbByType = {};
+    const trByType = {};
+    rows.forEach(r => {
+      if (col(r, 'Action', runCOL) === 'Training') {
+        const type = col(r, 'Text', runCOL);
+        const rc = parseInt(col(r, 'Rainbow', runCOL)) || 0;
+        totalTrainings++;
+        trByType[type] = (trByType[type] || 0) + 1;
+        if (rc > 0) { totalRainbows++; rbByType[type] = (rbByType[type] || 0) + 1; }
+        if (rc > 1) totalMulti++;
+      }
+    });
+
+    const totalStat = stats.SPD + stats.STA + stats.POW + stats.GUT + stats.INT;
+    return {
+      name, stats, totalStat, totalTrainings, totalRainbows, totalMulti,
+      rbByType, trByType,
+      chara: col(first, 'Chara', runCOL),
+      scenario: col(first, 'Scenario', runCOL),
+      turns: col(last, 'Turn', runCOL),
+      rainbowRate: totalTrainings > 0 ? (totalRainbows / totalTrainings * 100) : 0
+    };
+  });
+
+  // Overview
+  const totalRuns = runStats.length;
+  const avgRate = runStats.reduce((s, r) => s + r.rainbowRate, 0) / totalRuns;
+  const bestRun = runStats.reduce((a, b) => a.totalStat > b.totalStat ? a : b);
+  const worstRun = runStats.reduce((a, b) => a.totalStat < b.totalStat ? a : b);
+
+  document.getElementById('multiRunOverviewContent').innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Total Runs</div>
+        <div class="value" style="color:var(--accent)">${totalRuns}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg Rainbow Rate</div>
+        <div class="value" style="background:var(--rainbow);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">${avgRate.toFixed(1)}%</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Best Total Stats</div>
+        <div class="value" style="color:#6bffa3">${bestRun.totalStat.toLocaleString()}</div>
+        <div class="delta" style="font-size:11px;color:var(--text-dim)">${bestRun.name.substring(0, 30)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Worst Total Stats</div>
+        <div class="value" style="color:#ff6b6b">${worstRun.totalStat.toLocaleString()}</div>
+        <div class="delta" style="font-size:11px;color:var(--text-dim)">${worstRun.name.substring(0, 30)}</div>
+      </div>
+    </div>
+  `;
+
+  // Average stats
+  const statKeys = ['SPD', 'STA', 'POW', 'GUT', 'INT', 'SKLPT', 'FAN'];
+  document.getElementById('multiRunAvgStatsGrid').innerHTML = statKeys.map(s => {
+    const vals = runStats.map(r => r.stats[s]);
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    return `<div class="avg-stat-card">
+      <div class="label">${loc(s)}</div>
+      <div class="value" style="color:${STAT_COLORS[s] || '#fff'}">${Math.round(avg).toLocaleString()}</div>
+      <div class="range">${min.toLocaleString()} – ${max.toLocaleString()}</div>
+    </div>`;
+  }).join('');
+
+  // Rainbow rate per run chart
+  if (multiRunChart) multiRunChart.destroy();
+  multiRunChart = new Chart(document.getElementById('multiRunRainbowChart'), {
+    type: 'bar',
+    data: {
+      labels: runStats.map((r, i) => `Run ${i + 1}`),
+      datasets: [{
+        label: 'Rainbow Rate %',
+        data: runStats.map(r => r.rainbowRate.toFixed(1)),
+        backgroundColor: runStats.map(r => {
+          const rate = r.rainbowRate;
+          if (rate >= 50) return '#6bffa3';
+          if (rate >= 30) return '#ffd56b';
+          return '#ff6b6b';
+        }),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => runStats[items[0].dataIndex].name,
+            afterBody: (items) => {
+              const r = runStats[items[0].dataIndex];
+              return `${r.totalRainbows} rainbows / ${r.totalTrainings} trainings`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#999' }, grid: { color: '#2a2a4a' } },
+        y: { ticks: { color: '#999', callback: v => v + '%' }, grid: { color: '#2a2a4a' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // Comparison table
+  document.getElementById('multiRunCompHead').innerHTML = `<tr>
+    <th>Run</th><th>Character</th><th>Turns</th>
+    ${statKeys.map(s => `<th>${loc(s)}</th>`).join('')}
+    <th>Total</th><th>Rainbows</th><th>Rate</th>
+  </tr>`;
+
+  document.getElementById('multiRunCompBody').innerHTML = runStats.map((r, i) => `<tr>
+    <td>${i + 1}. ${r.name.substring(0, 40)}</td>
+    <td>${r.chara}</td>
+    <td>${r.turns}</td>
+    ${statKeys.map(s => `<td style="color:${STAT_COLORS[s] || '#fff'}">${r.stats[s].toLocaleString()}</td>`).join('')}
+    <td style="font-weight:700">${r.totalStat.toLocaleString()}</td>
+    <td>${r.totalRainbows}/${r.totalTrainings}</td>
+    <td style="font-weight:700;color:${r.rainbowRate >= 40 ? '#6bffa3' : r.rainbowRate >= 25 ? '#ffd56b' : '#ff6b6b'}">${r.rainbowRate.toFixed(1)}%</td>
+  </tr>`).join('');
+}
+</script>
+</body>
+</html>

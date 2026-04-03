@@ -242,6 +242,8 @@ class TrainingAction():
     action_type: ActionType = ActionType.Unknown
     text: str = ''
     value: int = 0
+    rainbow_count: int = 0
+    training_partners: str = ''
     dspeed: int = 0
     dstamina: int = 0
     dpower: int = 0
@@ -446,6 +448,8 @@ class TrainingAnalyzer():
                 ("Action", lambda x: x.action_type.name),
                 ("Text", lambda x: x.text),
                 ("Value", lambda x: x.value),
+                ("Rainbow", lambda x: x.rainbow_count if x.rainbow_count > 0 else ""),
+                ("Training Partners", lambda x: x.training_partners),
                 ("SPD", lambda x: x.speed),
                 ("STA", lambda x: x.stamina),
                 ("POW", lambda x: x.power),
@@ -529,6 +533,62 @@ class TrainingAnalyzer():
         logger.debug(f"CSV generation took {t2-t1:0.4f} seconds")
 
 
+    def detect_rainbow(self, action: TrainingAction, command_id: int, prev_resp: dict):
+        """Check if the training was a friendship training based on prev_resp data."""
+        if not prev_resp or 'home_info' not in prev_resp or 'chara_info' not in prev_resp:
+            return
+
+        # Build bond lookup from evaluation_info_array
+        eval_dict = {}
+        for eval_data in prev_resp['chara_info'].get('evaluation_info_array', []):
+            eval_dict[eval_data['training_partner_id']] = eval_data['evaluation']
+
+        # Find the matching command in home_info to get training partners
+        command_data = None
+        for cmd in prev_resp['home_info'].get('command_info_array', []):
+            if cmd['command_id'] == command_id:
+                command_data = cmd
+                break
+
+        # Also check scenario-specific command_info_array
+        if command_data is None:
+            for key in prev_resp:
+                if key.endswith('_data_set') and isinstance(prev_resp[key], dict):
+                    for cmd in prev_resp[key].get('command_info_array', []):
+                        if cmd['command_id'] == command_id:
+                            command_data = cmd
+                            break
+                    if command_data is not None:
+                        break
+
+        if command_data is None:
+            return
+
+        partner_ids = command_data.get('training_partner_array', [])
+        partner_names = []
+
+        for partner_id in partner_ids:
+            # Get partner name
+            if partner_id <= 6:
+                # Support card partner
+                if self.support_cards:
+                    support_id = self.support_cards[partner_id - 1]['support_card_id']
+                    partner_names.append(self.support_card_string_dict.get(support_id, f"Support {partner_id}"))
+
+                    # Check for friendship training (bond >= 80 + matching support type)
+                    bond = eval_dict.get(partner_id, 0)
+                    support_data = mdb.get_support_card_dict().get(support_id)
+                    if support_data:
+                        support_card_type = mdb.get_support_card_type(support_data)
+                        if support_card_type not in ("group", "friend") and bond >= 80 and command_id in constants.SUPPORT_TYPE_TO_COMMAND_IDS.get(support_card_type, []):
+                            action.rainbow_count += 1
+            elif partner_id > 1000:
+                partner_names.append(self.chara_names_dict.get(partner_id, f"Chara {partner_id}"))
+            else:
+                partner_names.append(f"NPC {partner_id}")
+
+        action.training_partners = "|".join(partner_names)
+
     def determine_action_type(self, req: dict, resp: dict, action: TrainingAction, prev_resp: dict):
         # Request specific:
 
@@ -594,6 +654,7 @@ class TrainingAnalyzer():
                     action.value = -1
                 else:
                     action.value = self.last_failure_rates[req['command_id']]
+                self.detect_rainbow(action, req['command_id'], prev_resp)
                 return
 
             # Resting
@@ -623,6 +684,7 @@ class TrainingAnalyzer():
                     action.value = -1
                 else:
                     action.value = self.last_failure_rates[req['single_mode_exec_command_request_common']['command_id']]
+                self.detect_rainbow(action, req['single_mode_exec_command_request_common']['command_id'], prev_resp)
                 return
 
             # Resting

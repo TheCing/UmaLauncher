@@ -392,7 +392,7 @@ class CarrotJuicer:
                     #TODO: fix this!
                     logger.debug("No start_time, using strftime")
                     training_id = time.strftime("%Y-%m-%d %H:%M:%S")
-                if 'IS_UL_GLOBAL' not in os.environ and (not self.training_tracker or not self.training_tracker.training_id_matches(training_id)):
+                if not self.training_tracker or not self.training_tracker.training_id_matches(training_id):
                     # Update cached dicts first
                     mdb.update_mdb_cache()
 
