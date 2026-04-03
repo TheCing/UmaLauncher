@@ -244,6 +244,8 @@ class TrainingAction():
     value: int = 0
     rainbow_count: int = 0
     training_partners: str = ''
+    available_races: str = ''
+    rival_races: str = ''
     dspeed: int = 0
     dstamina: int = 0
     dpower: int = 0
@@ -417,6 +419,9 @@ class TrainingAnalyzer():
             # Determine action type
             self.determine_action_type(req, resp, action, prev_resp)
 
+            # Capture available races from prev_resp (the turn state before this action)
+            self.capture_available_races(action, prev_resp)
+
             # Add to list
             self.action_list.append(action)
 
@@ -474,6 +479,8 @@ class TrainingAnalyzer():
                 ("Skill Hints Added", lambda x: "|".join([self.skill_hint_name_dict[(skillhint[0], skillhint[1])] + f" LVL{skillhint[2]}" for skillhint in x.add_skillhint])),
                 ("Statuses Added", lambda x: "|".join([self.status_name_dict[status] for status in x.add_status])),
                 ("Statuses Removed", lambda x: "|".join([self.status_name_dict[status] for status in x.remove_status])),
+                ("Available Races", lambda x: x.available_races),
+                ("Rival Races", lambda x: x.rival_races),
             ]
 
         # Create CSV
@@ -588,6 +595,36 @@ class TrainingAnalyzer():
                 partner_names.append(f"NPC {partner_id}")
 
         action.training_partners = "|".join(partner_names)
+
+    def capture_available_races(self, action: TrainingAction, prev_resp: dict):
+        """Capture available races and rival races from the previous response."""
+        if not prev_resp:
+            return
+
+        race_conditions = prev_resp.get('race_condition_array') or []
+        if not race_conditions:
+            return
+
+        # Build rival lookup
+        rival_pids = {}
+        fds = prev_resp.get('free_data_set') or {}
+        for rival in fds.get('rival_race_info_array') or []:
+            rival_pids[rival['program_id']] = rival.get('chara_id', 0)
+
+        # All available races
+        race_names = []
+        rival_names = []
+        for rc in race_conditions:
+            pid = rc['program_id']
+            name = self.race_program_name_dict.get(pid, f"Race {pid}")
+            race_names.append(name)
+            if pid in rival_pids:
+                chara_id = rival_pids[pid]
+                chara_name = self.chara_names_dict.get(chara_id, f"Chara {chara_id}")
+                rival_names.append(f"{name} ({chara_name})")
+
+        action.available_races = "|".join(race_names)
+        action.rival_races = "|".join(rival_names)
 
     def determine_action_type(self, req: dict, resp: dict, action: TrainingAction, prev_resp: dict):
         # Request specific:

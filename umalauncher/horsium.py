@@ -42,7 +42,15 @@ def firefox_setup(helper_url, settings):
 
     firefox_service = FirefoxService(executable_path=driver_path)
     firefox_service.creation_flags = CREATE_NO_WINDOW
-    profile = webdriver.FirefoxProfile(util.get_asset("ff_profile"))
+
+    # Use a persistent profile in appdata so extensions/settings survive restarts.
+    # Seed from the bundled ff_profile on first run.
+    persistent_profile_path = util.get_appdata("ff_profile")
+    if not os.path.exists(persistent_profile_path):
+        import shutil
+        shutil.copytree(util.get_asset("ff_profile"), persistent_profile_path)
+
+    profile = webdriver.FirefoxProfile(persistent_profile_path)
     profile.set_preference("security.fileuri.strict_origin_policy", False) # Disable CORS protections
     options = webdriver.FirefoxOptions()
     options.profile = profile
