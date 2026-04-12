@@ -550,7 +550,7 @@ class SettingsHandler():
         version_str = version.VERSION
         if util.is_script:
             version_str += ".script"
-        util.do_get_request(f"https://umapyoi.net/api/v1/umalauncher/startup/{self['unique_id']}/{version_str}")
+        # util.do_get_request(f"https://umapyoi.net/api/v1/umalauncher/startup/{self['unique_id']}/{version_str}")
 
     def display_preferences(self):
         general_var = [self.loaded_settings]

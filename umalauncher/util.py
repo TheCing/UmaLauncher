@@ -144,7 +144,7 @@ def do_get_request(url, error_title=None, error_message=None, ignore_timeout=Fal
     except:
         logger.warning(f"Failed to connect to {url}")
         logger.warning(traceback.format_exc())
-        if ignore_timeout or not has_failed_once:
+        if (ignore_timeout or not has_failed_once) and 'IS_UL_GLOBAL' not in os.environ:
             has_failed_once = True
             logger.warning(traceback.format_exc())
             show_warning_box(

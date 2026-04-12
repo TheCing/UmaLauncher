@@ -666,3 +666,624 @@ Runs analyzed:
 |------|------|-------|---------------|
 | `user_item_array[].item_id` | int | 7 | 59 |
 | `user_item_array[].number` | int | 7 | 5329650, 5386630, 5389810, 5393710, 5397170 |
+
+---
+
+## Standalone Race Packets (Room Match / Champions Meet)
+
+These packets are sent when a Room Match or Champions Meet race completes. They are **not** part of a training run and do **not** contain `race_start_info`. They are distinguished by having both `race_horse_data_array` and `race_scenario` at the top level, without an active training session.
+
+Detection condition in `carrotjuicer.py`:
+```python
+if not self.training_tracker and 'race_horse_data_array' in data and 'race_scenario' in data:
+```
+
+Generated from **1** Room Match packet.
+
+### Top-Level Keys
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `ground_condition` | int | 1=Good, 2=SlightlyHeavy, 3=Heavy, 4=Bad |
+| `race_horse_data_array` | array | Per-horse stats, skills, aptitudes (similar to `race_start_info.race_horse_data` in training) |
+| `race_result` | object | Room/match metadata (room name, host, race instance, seed, etc.) |
+| `race_scenario` | string | Base64-encoded gzip protobuf — frame-by-frame race simulation data |
+| `season` | int | 1=Spring, 2=Summer, 3=Autumn, 4=Winter |
+| `trained_chara_array` | array | Detailed trained character data (deck, factors, succession, rank score) |
+| `weather` | int | 1=Sunny, 2=Cloudy, 3=Rainy, 4=Snowy |
+
+### `race_result`
+
+Room/match metadata. Present in Room Match packets; structure may differ for Champions Meet.
+
+| Path | Type | Sample Values |
+|------|------|---------------|
+| `race_result.saved_room_id` | int | 68242958 |
+| `race_result.room_id` | int | 68242958 |
+| `race_result.register_id` | int | 1768116277 |
+| `race_result.host_viewer_id` | int | 835120372397 |
+| `race_result.room_name` | string | "Let's have fun!" |
+| `race_result.message` | string | "May the best Umamusume win!" |
+| `race_result.season` | int | 4 |
+| `race_result.weather` | int | 1 |
+| `race_result.ground_condition` | int | 1 |
+| `race_result.motivation` | int | 5 |
+| `race_result.entry_num` | int | 9 |
+| `race_result.current_entry_num` | int | 9 |
+| `race_result.private_entry_type` | int | 0 |
+| `race_result.private_entry_num` | int | 0 |
+| `race_result.private_current_entry_num` | int | 0 |
+| `race_result.is_allow_watching` | int | 1 |
+| `race_result.trained_chara_restriction` | int | 0 |
+| `race_result.restriction_type` | int | 0 |
+| `race_result.start_time` | string | "2026-01-11 07:24:37" |
+| `race_result.random_seed` | int | 1258164112 |
+| `race_result.race_instance_id` | int | 800023 |
+| `race_result.favorite_flag` | int | 0 |
+| `race_result.own_join_type` | int | 2 |
+| `race_result.simulate_app_version` | string | "1.20.7" |
+| `race_result.simulate_resource_version` | string | "10004010" |
+| `race_result.expiration_time` | string | "2027-01-11 07:24:37" |
+| `race_result.restrict_chara_info_array` | array | [] |
+
+### `race_horse_data_array[]`
+
+Per-horse data. Similar to `race_start_info.race_horse_data` in training packets, but with some additional fields (`viewer_id`, `team_id`, `team_member_id`, `trained_chara_id`, `nickname_id`).
+
+Note: `viewer_id` identifies the trainer/player who owns the horse. Multiple horses may share the same `viewer_id` (team of 3). `team_id` groups horses by team.
+
+| Path | Type | Sample Values |
+|------|------|---------------|
+| `race_horse_data_array[].viewer_id` | int | 127402280066, 159392583559, 835120372397 |
+| `race_horse_data_array[].trainer_name` | string | "Cing", "thefakeshadow", "yuu" |
+| `race_horse_data_array[].owner_viewer_id` | int | 0 |
+| `race_horse_data_array[].owner_trainer_name` | string | "" |
+| `race_horse_data_array[].chara_id` | int | 1002, 1004, 1006, 1007, 1020 |
+| `race_horse_data_array[].card_id` | int | 100201, 100402, 100602, 100701, 102001 |
+| `race_horse_data_array[].trained_chara_id` | int | 1497, 1516, 1521, 1574, 1707 |
+| `race_horse_data_array[].single_mode_chara_id` | int | 1497, 1516, 1521, 1574, 1707 |
+| `race_horse_data_array[].nickname_id` | int | 54, 67, 70, 84, 154 |
+| `race_horse_data_array[].rarity` | int | 3, 4, 5 |
+| `race_horse_data_array[].talent_level` | int | 3, 5 |
+| `race_horse_data_array[].frame_order` | int | 1–9 (post position) |
+| `race_horse_data_array[].running_style` | int | 1=Nige, 2=Senko, 3=Sashi, 4=Oikomi |
+| `race_horse_data_array[].speed` | int | 697–1200 |
+| `race_horse_data_array[].stamina` | int | 594–1043 |
+| `race_horse_data_array[].pow` | int | 699–1081 |
+| `race_horse_data_array[].guts` | int | 323–459 |
+| `race_horse_data_array[].wiz` | int | 1013–1159 |
+| `race_horse_data_array[].motivation` | int | 5 (1=VeryBad .. 5=Max) |
+| `race_horse_data_array[].final_grade` | int | 14, 15, 16 |
+| `race_horse_data_array[].popularity` | int | 1–9 |
+| `race_horse_data_array[].popularity_mark_rank_array` | array | [6, 6, 3] |
+| `race_horse_data_array[].mob_id` | int | 0 |
+| `race_horse_data_array[].npc_type` | int | 11 |
+| `race_horse_data_array[].race_dress_id` | int | 100201, 100430, 100646 |
+| `race_horse_data_array[].chara_color_type` | int | 0 |
+| `race_horse_data_array[].team_id` | int | 1, 2, 3 |
+| `race_horse_data_array[].team_member_id` | int | 1, 2, 3 |
+| `race_horse_data_array[].team_rank` | int | 0 |
+| `race_horse_data_array[].single_mode_win_count` | int | 11, 12, 13 |
+| `race_horse_data_array[].proper_ground_turf` | int | 1–8 (G–S) |
+| `race_horse_data_array[].proper_ground_dirt` | int | 1–8 |
+| `race_horse_data_array[].proper_distance_short` | int | 1–8 |
+| `race_horse_data_array[].proper_distance_mile` | int | 1–8 |
+| `race_horse_data_array[].proper_distance_middle` | int | 1–8 |
+| `race_horse_data_array[].proper_distance_long` | int | 1–8 |
+| `race_horse_data_array[].proper_running_style_nige` | int | 1–8 |
+| `race_horse_data_array[].proper_running_style_senko` | int | 1–8 |
+| `race_horse_data_array[].proper_running_style_sashi` | int | 1–8 |
+| `race_horse_data_array[].proper_running_style_oikomi` | int | 1–8 |
+| `race_horse_data_array[].skill_array` | array | |
+| `race_horse_data_array[].skill_array[].skill_id` | int | 110061, 200171, ... |
+| `race_horse_data_array[].skill_array[].level` | int | 1–6 |
+| `race_horse_data_array[].race_result_array` | array | Training race history (program_id, result_rank, turn) |
+| `race_horse_data_array[].win_saddle_id_array` | array | |
+| `race_horse_data_array[].item_id_array` | array | |
+| `race_horse_data_array[].motivation_change_flag` | int | 0 |
+| `race_horse_data_array[].frame_order_change_flag` | int | 0 |
+
+### `trained_chara_array[]`
+
+Extended character data including support deck, factors, succession (parents), and rank score. Matched to `race_horse_data_array` entries by `viewer_id` + `card_id`.
+
+| Path | Type | Sample Values |
+|------|------|---------------|
+| `trained_chara_array[].viewer_id` | int | 159392583559 |
+| `trained_chara_array[].owner_viewer_id` | int | 0 |
+| `trained_chara_array[].owner_trained_chara_id` | int | 0 |
+| `trained_chara_array[].trained_chara_id` | int | 1707 |
+| `trained_chara_array[].card_id` | int | 100602 |
+| `trained_chara_array[].running_style` | int | 2 |
+| `trained_chara_array[].speed` | int | 1200 |
+| `trained_chara_array[].stamina` | int | 802 |
+| `trained_chara_array[].power` | int | 910 |
+| `trained_chara_array[].guts` | int | 455 |
+| `trained_chara_array[].wiz` | int | 1075 |
+| `trained_chara_array[].rank` | int | 15 |
+| `trained_chara_array[].rank_score` | int | 15687 |
+| `trained_chara_array[].rarity` | int | 4 |
+| `trained_chara_array[].talent_level` | int | 5 |
+| `trained_chara_array[].chara_grade` | int | 900 |
+| `trained_chara_array[].scenario_id` | int | 2 |
+| `trained_chara_array[].nickname_id` | int | 54 |
+| `trained_chara_array[].fans` | int | 414700 |
+| `trained_chara_array[].wins` | int | 13 |
+| `trained_chara_array[].succession_num` | int | 0 |
+| `trained_chara_array[].race_cloth_id` | int | 100646 |
+| `trained_chara_array[].create_time` | string | "2026-01-09 07:02:53" |
+| `trained_chara_array[].proper_ground_turf` | int | 1–8 |
+| `trained_chara_array[].proper_ground_dirt` | int | 1–8 |
+| `trained_chara_array[].proper_distance_short` | int | 1–8 |
+| `trained_chara_array[].proper_distance_mile` | int | 1–8 |
+| `trained_chara_array[].proper_distance_middle` | int | 1–8 |
+| `trained_chara_array[].proper_distance_long` | int | 1–8 |
+| `trained_chara_array[].proper_running_style_nige` | int | 1–8 |
+| `trained_chara_array[].proper_running_style_senko` | int | 1–8 |
+| `trained_chara_array[].proper_running_style_sashi` | int | 1–8 |
+| `trained_chara_array[].proper_running_style_oikomi` | int | 1–8 |
+| `trained_chara_array[].skill_array` | array | Same format as `race_horse_data_array[].skill_array` |
+| `trained_chara_array[].support_card_list` | array | Support deck used in training |
+| `trained_chara_array[].support_card_list[].position` | int | 1–6 |
+| `trained_chara_array[].support_card_list[].support_card_id` | int | 30028, 30036, 30086 |
+| `trained_chara_array[].support_card_list[].limit_break_count` | int | 3, 4 |
+| `trained_chara_array[].support_card_list[].exp` | int | 82935, 118185 |
+| `trained_chara_array[].factor_id_array` | array | Own factor IDs |
+| `trained_chara_array[].factor_info_array` | array | Own factor details |
+| `trained_chara_array[].factor_info_array[].factor_id` | int | 203, 401, 3402 |
+| `trained_chara_array[].factor_info_array[].level` | int | 0 |
+| `trained_chara_array[].succession_chara_array` | array | Parent characters (6 entries: 2 parents x 3 generations) |
+| `trained_chara_array[].succession_chara_array[].position_id` | int | 10, 11, 12, 20, 21, 22 |
+| `trained_chara_array[].succession_chara_array[].card_id` | int | 100701, 100801, 102701 |
+| `trained_chara_array[].succession_chara_array[].rank` | int | 13 |
+| `trained_chara_array[].succession_chara_array[].rarity` | int | 2, 3, 5 |
+| `trained_chara_array[].succession_chara_array[].talent_level` | int | 1, 2, 3 |
+| `trained_chara_array[].succession_chara_array[].owner_viewer_id` | int | 0 |
+| `trained_chara_array[].succession_chara_array[].factor_id_array` | array | |
+| `trained_chara_array[].succession_chara_array[].factor_info_array` | array | |
+| `trained_chara_array[].succession_chara_array[].factor_info_array[].factor_id` | int | 203, 3402 |
+| `trained_chara_array[].succession_chara_array[].factor_info_array[].level` | int | 0 |
+| `trained_chara_array[].succession_chara_array[].win_saddle_id_array` | array | |
+| `trained_chara_array[].succession_history_array` | array | |
+| `trained_chara_array[].race_result_list` | array | Career race results |
+| `trained_chara_array[].race_result_list[].program_id` | int | 1070 |
+| `trained_chara_array[].race_result_list[].result_rank` | int | 1 |
+| `trained_chara_array[].race_result_list[].turn` | int | 12 |
+| `trained_chara_array[].race_result_list[].running_style` | int | 1, 2, 3 |
+| `trained_chara_array[].race_result_list[].result_time` | int | 919306 |
+| `trained_chara_array[].race_result_list[].weather` | int | 1, 2, 3 |
+| `trained_chara_array[].race_result_list[].ground_condition` | int | 1, 4 |
+| `trained_chara_array[].race_result_list[].popularity` | int | 1 |
+| `trained_chara_array[].race_result_list[].prize_money` | int | 0 |
+| `trained_chara_array[].nickname_id_array` | array | |
+| `trained_chara_array[].win_saddle_id_array` | array | |
+
+### `race_scenario`
+
+Base64-encoded gzip protobuf containing the full race simulation. Decoded via `external/race_data_parser.py`.
+
+Contains:
+- **Header**: version, max_length
+- **Frame data**: per-tick snapshots for each horse (distance, lane_position, speed, hp, temptation_mode)
+- **Horse results**: per-horse finish data:
+  - `finish_order` (0-indexed: 0 = 1st place)
+  - `finish_time` (scaled time in seconds)
+  - `finish_time_raw` (raw simulation time)
+  - `finish_diff_time` (diff from previous finisher, using scaled time)
+  - `start_delay_time`
+  - `guts_order`, `wiz_order`
+  - `last_spurt_start_distance`
+  - `running_style` (may differ from declared style)
+  - `defeat` (0=None, 1=Speed, 2=Stamina, 3=Power, 4=Guts, 5=Wiz)
+- **Events**: skill activations, position changes, etc. with frame timestamps
+
+### Key Differences from Training Race Packets
+
+| | Training Race | Standalone Race |
+|---|---|---|
+| **Trigger** | During a training run | Room Match / Champions Meet |
+| **Detection** | `race_scenario` + `race_start_info` | `race_horse_data_array` + `race_scenario` (no `race_start_info`) |
+| **Horse data location** | `race_start_info.race_horse_data` | `race_horse_data_array` (top-level) |
+| **Trained chara data** | Not present | `trained_chara_array` (deck, factors, succession) |
+| **Room metadata** | Not present | `race_result` (room_name, room_id, host, etc.) |
+| **Team info** | `team_id` = 0 | `team_id` = 1, 2, 3 (groups of 3 horses per player) |
+| **`viewer_id`** | Same for all (player only) | Different per trainer |
+| **`race_scenario` format** | Same protobuf | Same protobuf |
+
+---
+
+## Non-Training Packets (Home Screen, Circle, etc.)
+
+These packets are sent outside of training runs and are currently **not processed** by `carrotjuicer.py` (they fall through the handler). They contain account-level inventory data, social features, and game state that could be useful for tools and analysis.
+
+Captured from a single play session (2026-04-06).
+
+### Home Screen Load
+
+Sent when the game finishes loading and reaches the home screen. Contains the bulk of account-level data — **92 top-level keys**. This is the richest single packet in the game.
+
+Detection: First large packet after login, identifiable by presence of `common_define` + `user_info` + `support_card_list`.
+
+#### `support_card_list[]` — Support Card Inventory (191 cards observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `viewer_id` | int | Owner's viewer ID | 159392583559 |
+| `support_card_id` | int | Support card ID (maps to MDB) | 10001, 20020, 30078 |
+| `exp` | int | Total accumulated EXP | 24110, 56935, 74990 |
+| `limit_break_count` | int | Number of limit breaks (0–4) | 0, 2, 4 |
+| `favorite_flag` | int | 1 if favorited, 0 otherwise | 0, 1 |
+| `stock` | int | Duplicate stock count | 0 |
+| `possess_time` | string | When the card was first obtained | "2025-06-27 00:12:26" |
+| `create_time` | string | Creation timestamp | "2025-06-27 00:12:26" |
+
+#### `card_list[]` — Character Card Inventory (72 cards observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `card_id` | int | Character card ID (maps to MDB) | 100101, 100201, 105601 |
+| `rarity` | int | Star rarity (3=3★, 4=4★, 5=5★) | 3, 4, 5 |
+| `talent_level` | int | Talent level (limit break equivalent) | 1–5 |
+| `create_time` | string | When the card was obtained | "2025-07-15 08:18:37" |
+| `skill_data_array` | array | Skill data (usually empty at account level) | [] |
+
+#### `chara_list[]` — Base Character Roster (52 characters observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `chara_id` | int | Character ID | 1001, 1002, 1003 |
+| `training_num` | int | Number of times trained | 9, 13, 19 |
+| `love_point` | int | Affection/love points | 183, 783, 1207 |
+| `fan` | int | Total fan count for this character | 3228930, 4808108 |
+| `max_grade` | int | Highest grade achieved | 15, 16 |
+| `dress_id` | int | Equipped dress ID (0 = default) | 0, 100130, 2 |
+| `mini_dress_id` | int | Equipped chibi dress ID | 2, 100301 |
+
+#### `cloth_list[]` — Costume Inventory (78 costumes observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `cloth_id` | int | Costume/outfit ID (maps to MDB) | 5, 101, 102 |
+
+#### `piece_list[]` — Limit Break Pieces (72 entries observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `piece_id` | int | Piece ID (matches card_id) | 100101, 100201 |
+| `piece_num` | int | Number of pieces owned | 0, 130, 190 |
+
+#### `item_list[]` — Items Inventory (72 items observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `item_id` | int | Item ID (maps to MDB) | 1, 4, 7 |
+| `number` | int | Quantity owned | 648, 2579, 5684 |
+
+#### `coin_info` — Currency Balances
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `fcoin` | int | Free coins (jewels) | 8635 |
+| `coin` | int | Paid coins | 4790 |
+
+#### `music_list[]` — Unlocked Music (22 tracks observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `music_id` | int | Music track ID | 1001, 1004, 1005 |
+| `acquisition_time` | string | When the track was unlocked | "2025-07-06 02:24:17" |
+
+#### Other Inventory Keys
+
+| Key | Description |
+|-----|-------------|
+| `card_dress_array` | Card-specific dress/outfit data |
+| `directory_card_array` | Card directory / collection entries |
+| `release_card_array` | Released/unlocked cards |
+| `release_item_flag` | Item release flags |
+
+#### `trained_chara[]` — Raised Characters (232 characters observed)
+
+Full raised character data with stats, skills, factors, and career results.
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `viewer_id` | int | Owner's viewer ID | 159392583559 |
+| `trained_chara_id` | int | Unique raised character ID | 156 |
+| `owner_viewer_id` | int | Original owner (0 = self) | 0 |
+| `owner_trained_chara_id` | int | Original raised chara ID (0 = self) | 0 |
+| `single_mode_chara_id` | int | Training mode character ID | 50 |
+| `chara_seed` | int | Random seed for the character | 1190714959 |
+| `card_id` | int | Character card ID used | 105601 |
+| `succession_trained_chara_id_1` | int | Parent 1 trained_chara_id | 140 |
+| `succession_trained_chara_id_2` | int | Parent 2 trained_chara_id | 155 |
+| `use_type` | int | Usage type | 0 |
+| `speed` | int | Speed stat | 867 |
+| `stamina` | int | Stamina stat | 899 |
+| `power` | int | Power stat | 677 |
+| `wiz` | int | Wisdom stat | 360 |
+| `guts` | int | Guts stat | 418 |
+| `fans` | int | Fan count | 234819 |
+| `rank_score` | int | Rank score | 9035 |
+| `rank` | int | Grade rank | 12 |
+| `scenario_id` | int | Training scenario used | 1 |
+| `route_id` | int | Route taken | 9 |
+| `arrive_route_race_id` | int | Route arrival race ID | 99 |
+| `proper_ground_turf` | int | Turf aptitude (1=G, 3=E, 5=D, 7=B, 8=A, 9=S) | 7 |
+| `proper_ground_dirt` | int | Dirt aptitude | 2 |
+| `proper_running_style_nige` | int | Runner aptitude | 3 |
+| `proper_running_style_senko` | int | Leader aptitude | 7 |
+| `proper_running_style_sashi` | int | Betweener aptitude | 7 |
+| `proper_running_style_oikomi` | int | Chaser aptitude | 2 |
+| `proper_distance_short` | int | Short distance aptitude | 2 |
+| `proper_distance_mile` | int | Mile distance aptitude | 5 |
+| `proper_distance_middle` | int | Middle distance aptitude | 7 |
+| `proper_distance_long` | int | Long distance aptitude | 7 |
+| `succession_num` | int | Times used as succession parent | 45 |
+| `rarity` | int | Star rarity | 3 |
+| `is_saved` | int | 1 if saved | 1 |
+| `is_locked` | int | 1 if locked from deletion | 1 |
+| `talent_level` | int | Talent level | 2 |
+| `race_cloth_id` | int | Race outfit ID | 105601 |
+| `chara_grade` | int | Character grade | 8 |
+| `running_style` | int | Preferred running style (1=Nige, 2=Senko, 3=Sashi, 4=Oikomi) | 3 |
+| `nickname_id` | int | Earned nickname/title ID | 98 |
+| `wins` | int | Win count | 0 |
+| `register_time` | string | When registered | "2025-07-31 09:16:47" |
+| `create_time` | string | When created | "2025-07-31 09:16:47" |
+| `skill_array[]` | array | Learned skills | |
+| `skill_array[].skill_id` | int | Skill ID | 100561, 200362 |
+| `skill_array[].level` | int | Skill level | 1, 3 |
+| `support_card_list[]` | array | Support deck used (6 cards) | |
+| `support_card_list[].position` | int | Deck slot (1–6) | 1, 2, 3, 4, 5, 6 |
+| `support_card_list[].support_card_id` | int | Support card ID | 30028, 20020 |
+| `support_card_list[].exp` | int | Card EXP at time of training | 56935, 74990 |
+| `support_card_list[].limit_break_count` | int | Card limit breaks (0–4) | 0, 2, 4 |
+| `factor_id_array` | array | Factor IDs (own) | [203, 2202, 1001501] |
+| `factor_info_array[]` | array | Factor details (own) | |
+| `factor_info_array[].factor_id` | int | Factor ID | 203, 2202 |
+| `factor_info_array[].level` | int | Factor level | 0 |
+| `succession_chara_array[]` | array | Parent characters (6 entries: 2 parents × 3 generations) | |
+| `succession_chara_array[].position_id` | int | 10/11/12=parent1 chain, 20/21/22=parent2 chain | 10, 11, 20 |
+| `succession_chara_array[].card_id` | int | Parent's card ID | 100601 |
+| `succession_chara_array[].rank` | int | Parent's rank | 12 |
+| `succession_chara_array[].rarity` | int | Parent's rarity | 3 |
+| `succession_chara_array[].talent_level` | int | Parent's talent level | 2 |
+| `succession_chara_array[].owner_viewer_id` | int | Parent's owner (0=self) | 0, 375747068419 |
+| `succession_chara_array[].factor_id_array` | array | Parent's factor IDs | |
+| `succession_chara_array[].factor_info_array[]` | array | Parent's factor details | |
+| `succession_chara_array[].win_saddle_id_array` | array | Parent's earned saddle/trophy IDs | |
+| `race_result_list[]` | array | Career race results | |
+| `race_result_list[].turn` | int | Turn when race occurred | 12, 18, 29 |
+| `race_result_list[].program_id` | int | Race program ID | 1069, 646 |
+| `race_result_list[].weather` | int | 1=Sunny, 2=Cloudy, 3=Rainy | 1, 2 |
+| `race_result_list[].ground_condition` | int | 1=Good, 2=SlightlyHeavy, 3=Heavy, 4=Bad | 1, 2 |
+| `race_result_list[].running_style` | int | Style used in race | 3 |
+| `race_result_list[].popularity` | int | Popularity (betting rank) | 1, 2 |
+| `race_result_list[].result_rank` | int | Finishing position | 1, 2 |
+| `race_result_list[].result_time` | int | Finish time (microseconds?) | 1173177 |
+| `race_result_list[].prize_money` | int | Prize money earned | 0 |
+| `win_saddle_id_array` | array | Earned saddle/trophy IDs | [6, 10, 12, 14] |
+| `nickname_id_array` | array | All earned nickname IDs | [2, 7, 24, 26, 42] |
+
+#### `support_card_deck_array[]` — Saved Decks (10 decks observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `deck_id` | int | Deck slot number | 1, 2, 3 |
+| `name` | string | User-assigned deck name | "TT", "Deck 2" |
+| `support_card_id_array` | array[int] | 5 support card IDs in this deck | [30028, 30074, 30041, 30078, 30010] |
+
+#### `team_data_array[]` — Team Formations (15 entries observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `distance_type` | int | 1=Short, 2=Mile, 3=Middle, 4=Long, 5=Dirt | 1 |
+| `member_id` | int | Team slot position | 1, 2, 3 |
+| `trained_chara_id` | int | Assigned raised character ID | 1778, 1799 |
+| `running_style` | int | 1=Nige, 2=Senko, 3=Sashi, 4=Oikomi | 2, 3 |
+
+#### `trained_chara_favorite_array[]` — Favorited Characters (121 entries observed)
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `trained_chara_id` | int | Raised character ID | 179, 222, 556 |
+| `icon_type` | int | Favorite icon/category | 0, 1, 4 |
+| `memo` | string | User note (usually empty) | "" |
+
+#### `user_info` — Player Profile
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `viewer_id` | int | Player's unique ID | 159392583559 |
+| `name` | string | Display name | "Cing" |
+| `comment` | string | Profile comment | "：o" |
+| `honor_id` | int | Equipped honor/title ID | 403101 |
+| `sex` | int | Gender setting | 1 |
+| `tutorial_step` | int | Tutorial progress (1000 = complete) | 1000 |
+| `leader_chara_id` | int | Home screen leader character | 1040 |
+| `leader_chara_dress_id` | int | Leader's outfit ID | 104001 |
+| `support_card_id` | int | Displayed support card | 30078 |
+| `partner_chara_id` | int | Partner character ID | 2198 |
+| `bonus_follow_num` | int | Bonus follow count | 40 |
+| `fan` | int | Total fan count | 253589974 |
+| `rank_score` | int | Total rank score | 4076052 |
+| `best_team_evaluation_point` | int | Best team evaluation | 258265 |
+| `register_time` | string | Account creation date | "2025-06-27 00:02:28" |
+| `create_time` | string | Creation timestamp | "2025-06-27 00:02:28" |
+| `update_time` | string | Last update timestamp | "2026-04-06 20:33:13" |
+| `birth_day` | string | Birthday (MMDD) | "0902" |
+| `last_ticket_natural_recovery_time` | string | Last TP recovery time | "2026-04-06 15:42:40" |
+
+#### `champions_info` — Champions Meet State
+
+| Field | Type | Description | Sample Values |
+|-------|------|-------------|---------------|
+| `champions_id` | int | Current champions event ID (0 = none active) | 0 |
+| `entry_times` | int | Number of entries | 0 |
+| `free_entry_times` | int | Free entries remaining | 0 |
+| `round_id` | int | Current round | 0 |
+| `next_tier` | int | Next tier threshold | 0 |
+| `state` | int | Current state | 0 |
+| `entry_trained_chara_id_array` | array | Entered character IDs | [] |
+| `league_type` | int | League type | 0 |
+
+#### `honor_info` — Honors / Titles
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `honor_list[]` | array | All earned honor entries |
+| `honor_list[].honor_id` | int | Honor ID (maps to MDB) |
+| `honor_list[].create_time` | string | When the honor was earned |
+| `last_checked_time` | int | Unix timestamp of last check |
+
+#### Other Inventory Keys
+
+| Key | Description |
+|-----|-------------|
+| `card_dress_array` | Card-specific dress/outfit data |
+| `directory_card_array` | Card directory / collection entries |
+| `release_card_array` | Released/unlocked cards |
+| `release_item_flag` | Item release flags |
+
+#### Other Account Keys
+
+| Key | Description |
+|-----|-------------|
+| `last_select_support_card_deck_id` | Last used support card deck ID |
+| `scenario_record_array` | Training scenario completion records |
+| `single_mode_chara_light` | Training mode character summary data |
+| `single_mode_difficulty_info_array` | Training difficulty settings |
+| `single_mode_scenario_id_array` | Available training scenario IDs |
+| `single_mode_rental_succession_num` | Rental succession count |
+| `single_mode_succession_free_rental_time` | Free rental succession timer |
+
+#### Game State & Progress
+
+| Key | Description |
+|-----|-------------|
+| `common_define` | Game constants and configuration |
+| `login_bonus_list` | Login bonus state |
+| `login_trophy_info_array` | Login trophy info |
+| `ranking` | Player ranking data |
+| `rp_info` | RP (ranking points) info |
+| `tp_info` | TP (training points) info |
+| `add_friend_point` | Friend point balance |
+| `support_user_num` | Number of support users |
+| `notice_data` | System notices |
+| `tutorial_guide_data_array` | Tutorial state |
+| `unread_announce_id_array` | Unread announcement IDs |
+| `user_last_checked_time_list` | Timestamps for various user checks |
+| `user_birth` | User birthday setting |
+| `optin_user_birth` | Birthday opt-in flag |
+| `country_type` | Country/region type |
+| `is_linkage` | Account linkage status |
+| `dma_state` | DMA (Digital Markets Act) state |
+| `res_version` | Resource version |
+
+#### Race & Competition
+
+| Key | Description |
+|-----|-------------|
+| `challenge_match_load_info` | Challenge Match state |
+| `daily_race_playing_info` | Daily race progress |
+| `daily_legend_race_playing_info` | Daily Legend race progress |
+| `legend_race_playing_info` | Legend race progress |
+| `practice_race_state` | Practice race state |
+| `practice_partner_chara_array` | Practice partner characters |
+| `practice_partner_owner_info_array` | Practice partner owner info |
+| `stadium_race_chara_id_array` | Stadium race character IDs |
+| `team_stadium_race_status` | Team Stadium race status |
+| `team_stadium_user` | Team Stadium user data |
+| `team_building_load_info` | Team Building state |
+| `training_challenge_exam_infos` | Training challenge exam info |
+| `training_challenge_user_info` | Training challenge user data |
+
+#### Gacha & Shop
+
+| Key | Description |
+|-----|-------------|
+| `gacha_banner_info` | Current gacha banner info |
+| `gacha_campaign_info_array` | Active gacha campaigns |
+| `added_gacha_stock_info` | New gacha stock info |
+| `limited_shop_info` | Limited shop offerings |
+| `border_line` | Gacha/ranking border lines |
+| `payment_purchased_times_list` | Payment purchase history counts |
+| `season_pack_info` | Season pack offerings |
+| `cygames_id_apply_product_flag` | Cygames ID product flag |
+| `cygames_id_serial_code_reward_info_array` | Serial code reward info |
+
+#### Story & Events
+
+| Key | Description |
+|-----|-------------|
+| `main_story_data_list` | Main story progress |
+| `character_story_data_list` | Character story progress |
+| `extra_story_data_list` | Extra story progress |
+| `home_story_data_array` | Home screen story data |
+| `event_data_array` | Event data |
+| `story_event_id` | Current story event ID |
+| `story_event_first_flag` | Story event first-time flag |
+| `story_event_mission_list` | Story event missions |
+| `story_event_roulette_coin_num` | Story event roulette coins |
+| `story_favorite_array` | Favorited stories |
+| `released_episode_data_array` | Released episode data |
+| `short_episode_data_array` | Short episode data |
+| `chara_profile_array` | Character profile data |
+| `valentine_campaign_received_array` | Valentine campaign state |
+| `fan_raid_id` | Fan raid event ID |
+| `fan_raid_first_flag` | Fan raid first-time flag |
+
+#### Home & Social
+
+| Key | Description |
+|-----|-------------|
+| `home_position_info` | Home screen character positioning |
+| `home_poster_data_array` | Home screen poster/banner data |
+| `jukebox_info` | Jukebox settings |
+| `jukebox_request_history` | Jukebox request history |
+| `last_information_update_time` | Last info update timestamp |
+| `menu_badge_info` | Menu badge notification counts |
+| `parental_consent` | Parental consent flag |
+| `recheck_dmm_jewel` | DMM jewel recheck flag |
+| `talk_gallery_list` | Talk gallery entries |
+| `circle_data` | Circle (guild) summary data |
+
+### Circle / Guild Packets
+
+Sent when entering the Circle screen. Contains social/guild data.
+
+Detection: Presence of `circle_info` + `circle_user_array`.
+
+| Key | Description |
+|-----|-------------|
+| `circle_info` | Circle details (name, level, etc.) |
+| `circle_user_array` | Circle member list |
+| `circle_chat_message_array` | Circle chat messages |
+| `circle_item_donate_array` | Item donation records |
+| `circle_item_request_array` | Item requests |
+| `circle_post_partner_array` | Rental partner posts |
+| `circle_ranking_this_month` | Current month circle ranking |
+| `circle_ranking_last_month` | Last month circle ranking |
+| `room_info_array` | Circle room info |
+| `room_match_info_array` | Room Match info |
+| `room_user_array` | Room users |
+| `summary_user_info_array` | Summary user info |
+| `change_leader` | Leader change info |
+| `chat_polling_interval` | Chat poll interval |
+| `daily_donated_count` | Daily donation count |
+| `daily_post_partner_count` | Daily partner post count |
+| `is_calculate` | Calculation flag |
+| `is_scout_able` | Scouting availability |
+| `is_show_ranking_result` | Ranking result visibility |
+
+### Other Observed Packets
+
+| Keys | Context |
+|------|---------|
+| `support_card_data` | Viewing a specific support card's details |
+| `trained_chara_array`, `trained_chara_favorite_array`, `room_match_entry_chara_id_array` | Viewing Room Match character selection |
+| `release_card_array` | Card release/unlock event |
+| `circle_item_donate_array`, `circle_user_array`, `reward_summary_info` | Circle donation reward |
+| `circle_item_donate_array`, `current_item_data_array`, `daily_donated_count`, `reward_summary_info` | Circle donation with item update |
+| `home_poster_data_array`, `home_story_data_array`, `released_episode_data_array`, `short_episode_data_array`, `talk_gallery_data_array`, `tutorial_guide_data_array` | Home screen story/episode refresh |

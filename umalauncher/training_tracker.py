@@ -244,6 +244,8 @@ class TrainingAction():
     value: int = 0
     rainbow_count: int = 0
     training_partners: str = ''
+    event_source: str = ''
+    event_chain: str = ''
     available_races: str = ''
     rival_races: str = ''
     dspeed: int = 0
@@ -288,6 +290,7 @@ class TrainingAnalyzer():
         self.support_card_string_dict = mdb.get_support_card_string_dict()
         self.mant_item_string_dict = mdb.get_mant_item_string_dict()
         self.gl_lesson_dict = mdb.get_gl_lesson_dict()
+        self.support_event_chain_dict = mdb.get_support_event_chain_dict()
 
     def set_training_tracker(self, training_tracker):
         self.training_tracker = training_tracker
@@ -455,6 +458,8 @@ class TrainingAnalyzer():
                 ("Value", lambda x: x.value),
                 ("Rainbow", lambda x: x.rainbow_count if x.rainbow_count > 0 else ""),
                 ("Training Partners", lambda x: x.training_partners),
+                ("Event Source", lambda x: x.event_source),
+                ("Event Chain", lambda x: x.event_chain),
                 ("SPD", lambda x: x.speed),
                 ("STA", lambda x: x.stamina),
                 ("POW", lambda x: x.power),
@@ -674,12 +679,34 @@ class TrainingAnalyzer():
 
                 action.text = self.chara_names_dict[hint_chara_id] if hint_chara_id in self.chara_names_dict else "Unknown Chara"
                 action.action_type = ActionType.SkillHint
+
+                # Attribute skill hint to its support card
+                event_contents = prev_resp['unchecked_event_array'][0].get('event_contents_info', {})
+                hint_support_id = event_contents.get('support_card_id', 0)
+                if hint_support_id and hint_support_id in self.support_card_string_dict:
+                    action.event_source = self.support_card_string_dict[hint_support_id]
+
                 return
 
             action.action_type = ActionType.Event
             # This is assuming there is only ever one event in unchecked_event_array.
             action.text = self.event_title_dict[story_id]
             action.value = req['choice_number']
+
+            # Attribute the event to a support card and track chain position
+            event_contents = prev_resp['unchecked_event_array'][0].get('event_contents_info', {})
+            event_support_id = event_contents.get('support_card_id', 0)
+            if event_support_id and event_support_id in self.support_card_string_dict:
+                action.event_source = self.support_card_string_dict[event_support_id]
+            elif event_support_id == 0:
+                # Character's own event
+                action.event_source = self.chara_names_dict.get(self.chara_id, "Character")
+
+            chain_info = self.support_event_chain_dict.get(story_id)
+            if chain_info:
+                _, pos, total = chain_info
+                action.event_chain = f"{pos}/{total}"
+
             return
 
         if 'command_type' in req and req['command_type']:

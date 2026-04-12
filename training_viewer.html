@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Uma Training Viewer</title>
+<title>Uma Viewer</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root {
@@ -115,17 +115,21 @@
     max-width: 400px;
   }
   .run-selector-bar select:focus { border-color: var(--accent); }
-  .run-selector-bar .add-more-btn {
+  .add-more-btn {
     background: var(--surface2);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 6px 14px;
     color: var(--text);
     font-size: 13px;
+    font-family: inherit;
     cursor: pointer;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, background 0.2s;
   }
-  .run-selector-bar .add-more-btn:hover { border-color: var(--accent); }
+  .add-more-btn:hover {
+    border-color: var(--accent);
+    background: var(--surface);
+  }
 
   /* Content */
   .content { padding: 24px; display: none; }
@@ -348,6 +352,165 @@
   .positive { color: #6bffa3; }
   .negative { color: #ff6b6b; }
 
+  /* Account viewer */
+  .account-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .account-header .account-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .account-header .account-meta {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .account-header .account-meta b { color: var(--text); }
+  .account-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .account-section h3 {
+    font-size: 16px;
+    margin-bottom: 14px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .account-section h3 .count-badge {
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--surface2);
+    color: var(--text-dim);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .account-search {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    width: 100%;
+    max-width: 400px;
+    margin-bottom: 12px;
+  }
+  .account-search:focus { border-color: var(--accent); }
+  .account-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 8px;
+  }
+  .account-card {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .account-card .card-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .account-card .card-meta {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .lb-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .lb-0 { background: #2a2a2a; color: #666; }
+  .lb-1 { background: #2a3a2a; color: #6bffa3; }
+  .lb-2 { background: #2a3a3a; color: #6bd5ff; }
+  .lb-3 { background: #3a2a3a; color: #a36bff; }
+  .lb-4 { background: #3a3a1a; color: #ffd56b; }
+  .rarity-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .rarity-1, .rarity-2 { background: #2a2a2a; color: #999; }
+  .rarity-3 { background: #2a2a1a; color: #ffa36b; }
+  .rarity-4 { background: #2a1a2a; color: #a36bff; }
+  .rarity-5 { background: #3a3a1a; color: #ffd56b; }
+  .trained-stats {
+    display: flex;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .trained-stats span { padding: 1px 4px; border-radius: 3px; }
+  .account-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .account-table th {
+    background: var(--surface2);
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .account-table th:hover { color: var(--text); }
+  .account-table th .sort-arrow { margin-left: 4px; }
+  .account-table td {
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .account-table tr:hover td { background: rgba(233, 69, 96, 0.05); }
+  .account-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .account-tab {
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .account-tab:hover { color: var(--text); }
+  .account-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .account-tab-content { display: none; }
+  .account-tab-content.active { display: block; }
+
   .turn-detail {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -404,6 +567,157 @@
   .avg-stat-card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
   .avg-stat-card .range { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
+  /* Race viewer */
+  .race-selector-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .race-selector-bar label { font-size: 13px; color: var(--text-dim); }
+  .race-selector-bar select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    flex: 1;
+    min-width: 300px;
+    max-width: 560px;
+  }
+  .race-selector-bar select:focus { border-color: var(--accent); }
+  .race-selector-bar input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    min-width: 220px;
+  }
+  .race-selector-bar input:focus { border-color: var(--accent); }
+  .race-info {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .race-info .race-info-item { font-size: 13px; }
+  .race-info .race-info-item span { color: var(--text-dim); }
+  .race-info .race-info-item b { color: var(--text); }
+  .race-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .race-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .race-table th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap;
+  }
+  .race-table td {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .race-table tr:hover td { background: rgba(233, 69, 96, 0.05); }
+  .race-table tr.self-row td { background: rgba(233, 69, 96, 0.12); }
+  .race-table tr.self-row:hover td { background: rgba(233, 69, 96, 0.18); }
+  .finish-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 12px;
+    color: #1a1a2e;
+    background: var(--surface2);
+  }
+  .finish-1 { background: linear-gradient(135deg, #ffd700, #ffae00); }
+  .finish-2 { background: linear-gradient(135deg, #d0d0d0, #a0a0a0); }
+  .finish-3 { background: linear-gradient(135deg, #cd7f32, #8b4513); color: #fff; }
+  .race-horse-name { font-weight: 600; }
+  .race-horse-trainer { font-size: 11px; color: var(--text-dim); }
+  .race-style-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .style-Nige, .style-Runner { background: #4a1a1a; color: #ff6b6b; }
+  .style-Senko, .style-Leader { background: #1a3a4a; color: #6bd5ff; }
+  .style-Sashi, .style-Betweener { background: #1a4a2e; color: #6bffa3; }
+  .style-Oikomi, .style-Chaser { background: #3a1a4a; color: #a36bff; }
+  .apt-grid {
+    display: grid;
+    grid-template-columns: repeat(5, auto);
+    gap: 3px 6px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .apt-cell {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .apt-cell .apt-label { color: var(--text-dim); }
+  .apt-cell .apt-val { font-weight: 700; }
+  .apt-S { color: #ff6bce; }
+  .apt-A { color: #ffd56b; }
+  .apt-B { color: #6bffa3; }
+  .apt-C { color: #6bd5ff; }
+  .apt-D { color: #a36bff; }
+  .apt-E, .apt-F, .apt-G { color: #777; }
+  .skills-cell {
+    max-width: 420px;
+    white-space: normal;
+    line-height: 1.5;
+  }
+  .skill-chip {
+    display: inline-block;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin: 2px 3px 2px 0;
+    font-size: 11px;
+    color: var(--text);
+  }
+  .skill-chip.unique { border-color: #ffd56b; color: #ffd56b; }
+  .skill-toggle {
+    font-size: 11px;
+    color: var(--accent);
+    cursor: pointer;
+    margin-left: 4px;
+  }
+
   @media (max-width: 768px) {
     .charts-grid { grid-template-columns: 1fr; }
     .stats-grid { grid-template-columns: repeat(3, 1fr); }
@@ -413,15 +727,15 @@
 <body>
 
 <div id="header" class="header">
-  <h1 id="headerTitle">Uma Training Viewer</h1>
+  <h1 id="headerTitle">Uma Viewer</h1>
   <div class="meta" id="headerMeta"></div>
 </div>
 
 <div id="uploadSection" class="upload-area">
   <div class="drop-zone" id="dropZone">
-    <h2 id="dropZoneTitle">Load Training CSV</h2>
-    <p id="dropZoneHint">Drop CSV files here or click to browse (multi-select supported)</p>
-    <input type="file" id="fileInput" accept=".csv" multiple>
+    <h2 id="dropZoneTitle">Load Files</h2>
+    <p id="dropZoneHint">Drop CSV (training / race results) or JSON (account) files here, or click to browse</p>
+    <input type="file" id="fileInput" accept=".csv,.json" multiple>
   </div>
 </div>
 
@@ -430,7 +744,7 @@
     <label for="runSelector">Run:</label>
     <select id="runSelector"></select>
     <button class="add-more-btn" id="addMoreBtn">+ Add More</button>
-    <input type="file" id="addMoreInput" accept=".csv" multiple style="display:none;">
+    <input type="file" id="addMoreInput" accept=".csv,.json" multiple style="display:none;">
   </div>
 
   <div id="tabBar" class="tabs">
@@ -516,6 +830,148 @@
   </div>
 </div>
 
+<!-- Account Viewer (shown when JSON is loaded) -->
+<div id="accountSection" style="display:none;">
+  <div class="header">
+    <h1>Account Viewer</h1>
+    <div class="meta" id="accountHeaderMeta"></div>
+  </div>
+  <div style="padding: 24px;">
+    <div class="account-header" id="accountHeader"></div>
+
+    <div class="account-tabs" id="accountTabs">
+      <div class="account-tab active" data-acct-tab="acct-support">Support Cards</div>
+      <div class="account-tab" data-acct-tab="acct-cards">Character Cards</div>
+      <div class="account-tab" data-acct-tab="acct-characters">Characters</div>
+      <div class="account-tab" data-acct-tab="acct-trained">Raised Characters</div>
+    </div>
+
+    <!-- Support Cards -->
+    <div class="account-tab-content active" id="acct-support">
+      <div class="account-section">
+        <h3>Support Cards <span class="count-badge" id="supportCount"></span></h3>
+        <input type="text" class="account-search" id="supportSearch" placeholder="Search support cards...">
+        <div style="overflow-x:auto;">
+          <table class="account-table" id="supportTable">
+            <thead><tr>
+              <th data-sort="name">Name</th>
+              <th data-sort="lb">LB</th>
+              <th data-sort="exp">EXP</th>
+              <th data-sort="fav">Fav</th>
+              <th data-sort="stock">Stock</th>
+            </tr></thead>
+            <tbody id="supportTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Character Cards -->
+    <div class="account-tab-content" id="acct-cards">
+      <div class="account-section">
+        <h3>Character Cards <span class="count-badge" id="cardCount"></span></h3>
+        <input type="text" class="account-search" id="cardSearch" placeholder="Search character cards...">
+        <div style="overflow-x:auto;">
+          <table class="account-table" id="cardTable">
+            <thead><tr>
+              <th data-sort="character">Character</th>
+              <th data-sort="outfit">Outfit</th>
+              <th data-sort="rarity">Rarity</th>
+              <th data-sort="talent">Talent</th>
+            </tr></thead>
+            <tbody id="cardTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Characters -->
+    <div class="account-tab-content" id="acct-characters">
+      <div class="account-section">
+        <h3>Characters <span class="count-badge" id="charaCount"></span></h3>
+        <input type="text" class="account-search" id="charaSearch" placeholder="Search characters...">
+        <div style="overflow-x:auto;">
+          <table class="account-table" id="charaTable">
+            <thead><tr>
+              <th data-sort="name">Name</th>
+              <th data-sort="training_num">Trainings</th>
+              <th data-sort="fan">Fans</th>
+              <th data-sort="max_grade">Max Grade</th>
+              <th data-sort="love_point">Love</th>
+            </tr></thead>
+            <tbody id="charaTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Raised Characters -->
+    <div class="account-tab-content" id="acct-trained">
+      <div class="account-section">
+        <h3>Raised Characters <span class="count-badge" id="trainedCount"></span></h3>
+        <input type="text" class="account-search" id="trainedSearch" placeholder="Search raised characters...">
+        <div style="overflow-x:auto;">
+          <table class="account-table" id="trainedTable">
+            <thead><tr>
+              <th data-sort="character">Character</th>
+              <th data-sort="outfit">Outfit</th>
+              <th data-sort="rank_score">Score</th>
+              <th data-sort="speed">SPD</th>
+              <th data-sort="stamina">STA</th>
+              <th data-sort="power">POW</th>
+              <th data-sort="guts">GUT</th>
+              <th data-sort="wisdom">WIT</th>
+              <th data-sort="total">Total</th>
+              <th data-sort="style">Style</th>
+              <th data-sort="skills">Skills</th>
+            </tr></thead>
+            <tbody id="trainedTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Race Results Viewer (shown when race CSV is loaded) -->
+<div id="raceSection" style="display:none;">
+  <div class="header">
+    <h1>Race Results Viewer</h1>
+    <div class="meta" id="raceHeaderMeta"></div>
+  </div>
+  <div class="race-selector-bar">
+    <label for="raceSelector">Race:</label>
+    <select id="raceSelector"></select>
+    <input type="text" id="raceSearch" placeholder="Search horse, trainer, skill...">
+    <button class="add-more-btn" id="addMoreBtnRace">+ Add More</button>
+  </div>
+  <div style="padding: 24px;">
+    <div class="race-info" id="raceInfo"></div>
+    <div class="race-table-wrap" style="max-height:75vh;overflow-y:auto;">
+      <table class="race-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Horse</th>
+            <th>Style</th>
+            <th>Time</th>
+            <th>SPD</th>
+            <th>STA</th>
+            <th>POW</th>
+            <th>GUT</th>
+            <th>WIT</th>
+            <th>Score</th>
+            <th>Fans</th>
+            <th>Aptitudes</th>
+            <th>Skills</th>
+          </tr>
+        </thead>
+        <tbody id="raceTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script>
 const STAT_COLORS = {
   SPD: '#6bd5ff',
@@ -570,23 +1026,70 @@ addMoreBtn.addEventListener('click', () => addMoreInput.click());
 addMoreInput.addEventListener('change', e => { if (e.target.files.length) loadFiles(e.target.files); });
 
 function loadFiles(fileList) {
-  const files = Array.from(fileList).filter(f => f.name.endsWith('.csv'));
-  if (!files.length) return;
+  const files = Array.from(fileList);
+  const csvFiles = files.filter(f => f.name.endsWith('.csv'));
+  const jsonFiles = files.filter(f => f.name.endsWith('.json'));
 
-  let loaded = 0;
-  files.forEach(file => {
+  let pending = csvFiles.length + jsonFiles.length;
+  if (!pending) return;
+
+  let newTrainingRuns = 0;
+  let newRaceRows = 0;
+
+  const maybeFinish = () => {
+    if (pending !== 0) return;
+    if (newTrainingRuns > 0) {
+      activeRunIndex = allRuns.length - 1;
+      onRunsChanged();
+    }
+    if (newRaceRows > 0) {
+      onRacesChanged();
+    }
+  };
+
+  csvFiles.forEach(file => {
     const reader = new FileReader();
     reader.onload = e => {
-      const run = parseCSV(e.target.result, file.name);
-      allRuns.push(run);
-      loaded++;
-      if (loaded === files.length) {
-        activeRunIndex = allRuns.length - 1;
-        onRunsChanged();
+      const text = e.target.result;
+      // Peek at first line to detect race vs training CSV
+      const firstLine = text.split('\n', 1)[0] || '';
+      const headerCells = parseCSVLine(firstLine);
+      if (isRaceCSV(headerCells)) {
+        const added = parseRaceCSV(text, file.name);
+        newRaceRows += added;
+      } else {
+        const run = parseCSV(text, file.name);
+        allRuns.push(run);
+        newTrainingRuns++;
       }
+      pending--;
+      maybeFinish();
     };
     reader.readAsText(file, 'utf-8');
   });
+
+  jsonFiles.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.support_cards || data.character_cards || data.characters) {
+          loadAccountData(data);
+        }
+      } catch (err) {
+        console.error('Failed to parse JSON:', err);
+      }
+      pending--;
+      maybeFinish();
+    };
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+function isRaceCSV(headers) {
+  return headers.includes('finish_order') &&
+         headers.includes('trainer_name') &&
+         headers.includes('chara_name');
 }
 
 function parseCSV(text, fileName) {
@@ -954,6 +1457,7 @@ function renderExplorer(run) {
   const { rows, COL: runCOL } = run;
 
   const displayCols = ['Turn', 'Action', 'Text', 'Value', 'Rainbow', 'Training Partners',
+    'Event Source', 'Event Chain',
     'SPD', 'STA', 'POW', 'GUT', 'INT', 'SKLPT', 'ERG', 'MOT',
     '\u0394SPD', '\u0394STA', '\u0394POW', '\u0394GUT', '\u0394INT', '\u0394SKLPT', '\u0394ERG',
     'Skills Added', 'Skill Hints Added', 'Statuses Added'];
@@ -1012,6 +1516,10 @@ function renderExplorer(run) {
             else if (n < 0) val = `<span class="negative">${n}</span>`;
           } else if (c === 'Training Partners' && val) {
             val = val.replace(/\|/g, ', ');
+          } else if (c === 'Event Chain' && val) {
+            val = `<span style="color:var(--accent);font-weight:600">${val}</span>`;
+          } else if (c === 'Event Source' && val) {
+            val = `<span style="color:#a36bff">${val}</span>`;
           }
           return `<td>${val}</td>`;
         }).join('') + '</tr>';
@@ -1167,6 +1675,453 @@ function renderMultiRunSummary() {
     <td>${r.totalRainbows}/${r.totalTrainings}</td>
     <td style="font-weight:700;color:${r.rainbowRate >= 40 ? '#6bffa3' : r.rainbowRate >= 25 ? '#ffd56b' : '#ff6b6b'}">${r.rainbowRate.toFixed(1)}%</td>
   </tr>`).join('');
+}
+
+// ==================== Account Viewer ====================
+let accountData = null;
+let accountSortState = {};
+
+function loadAccountData(data) {
+  accountData = data;
+  document.getElementById('uploadSection').style.display = 'none';
+  document.getElementById('accountSection').style.display = 'block';
+  renderAccount();
+}
+
+// Account tabs
+document.querySelectorAll('.account-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.account-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.account-tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.acctTab).classList.add('active');
+  });
+});
+
+function renderAccount() {
+  if (!accountData) return;
+  const user = accountData.user || {};
+  const summary = accountData.summary || {};
+
+  // Header
+  document.getElementById('accountHeaderMeta').textContent =
+    `Captured: ${accountData.captured_at || 'Unknown'}`;
+
+  document.getElementById('accountHeader').innerHTML = `
+    <div>
+      <div class="account-name">${user.name || 'Unknown'}</div>
+      <div class="account-meta">ID: <b>${user.viewer_id || '?'}</b></div>
+    </div>
+    <div class="account-meta">Rank Score: <b>${(user.rank_score || 0).toLocaleString()}</b></div>
+    <div class="account-meta">Total Fans: <b>${(user.total_fans || 0).toLocaleString()}</b></div>
+    <div class="account-meta">Best Team: <b>${(user.best_team_evaluation || 0).toLocaleString()}</b></div>
+    <div class="account-meta">Since: <b>${(user.registered || '').split(' ')[0]}</b></div>
+    ${accountData.currencies ? `<div class="account-meta">Coins: <b>${accountData.currencies.fcoin || 0} free / ${accountData.currencies.coin || 0} paid</b></div>` : ''}
+    <div class="account-meta">
+      ${summary.support_cards || 0} supports &middot;
+      ${summary.character_cards || 0} cards &middot;
+      ${summary.characters || 0} characters &middot;
+      ${summary.raised_characters || 0} raised &middot;
+      ${summary.costumes || 0} costumes
+    </div>
+  `;
+
+  renderSupportCards();
+  renderCharacterCards();
+  renderCharacters();
+  renderTrainedCharas();
+
+  // Attach search listeners
+  setupSearch('supportSearch', renderSupportCards);
+  setupSearch('cardSearch', renderCharacterCards);
+  setupSearch('charaSearch', renderCharacters);
+  setupSearch('trainedSearch', renderTrainedCharas);
+
+  // Attach sort listeners
+  setupTableSort('supportTable', renderSupportCards);
+  setupTableSort('cardTable', renderCharacterCards);
+  setupTableSort('charaTable', renderCharacters);
+  setupTableSort('trainedTable', renderTrainedCharas);
+}
+
+function setupSearch(inputId, renderFn) {
+  const el = document.getElementById(inputId);
+  if (el._listener) return;
+  el._listener = true;
+  el.addEventListener('input', () => renderFn());
+}
+
+function setupTableSort(tableId, renderFn) {
+  const table = document.getElementById(tableId);
+  if (table._sortListener) return;
+  table._sortListener = true;
+  table.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      const prev = accountSortState[tableId];
+      if (prev && prev.key === key) {
+        accountSortState[tableId] = { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+      } else {
+        accountSortState[tableId] = { key, dir: 'desc' };
+      }
+      renderFn();
+    });
+  });
+}
+
+function sortData(items, tableId, getVal) {
+  const state = accountSortState[tableId];
+  if (!state) return items;
+  const sorted = [...items].sort((a, b) => {
+    const va = getVal(a, state.key);
+    const vb = getVal(b, state.key);
+    if (typeof va === 'string') return state.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return state.dir === 'asc' ? va - vb : vb - va;
+  });
+  return sorted;
+}
+
+// ==================== Race Results Viewer ====================
+const WEATHER_LABELS = { '1': 'Sunny', '2': 'Cloudy', '3': 'Rainy', '4': 'Snowy' };
+const GROUND_LABELS = { '1': 'Good', '2': 'Slightly Heavy', '3': 'Heavy', '4': 'Bad' };
+const SEASON_LABELS = { '1': 'Spring', '2': 'Summer', '3': 'Autumn', '4': 'Winter' };
+const STYLE_LABELS = {
+  'Nige': 'Runner', 'Senko': 'Leader', 'Sashi': 'Betweener', 'Oikomi': 'Chaser'
+};
+
+const allRaces = []; // array of { key, timestamp, room_name, horses: [...] }
+let activeRaceIndex = 0;
+
+function parseRaceCSV(text, fileName) {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return 0;
+  const headers = parseCSVLine(lines[0]);
+  const COL = {};
+  headers.forEach((h, i) => COL[h] = i);
+
+  const g = r => (COL[r] !== undefined ? r : null);
+  const cell = (row, name) => (COL[name] !== undefined ? (row[COL[name]] || '') : '');
+
+  const byRace = new Map();
+  for (let li = 1; li < lines.length; li++) {
+    const row = parseCSVLine(lines[li]);
+    const timestamp = cell(row, 'timestamp');
+    const raceInstance = cell(row, 'race_instance_id');
+    const roomId = cell(row, 'room_id');
+    // race_instance_id identifies the race *template* (can repeat across
+    // multiple runs of the same room), so it can't be used alone as a key.
+    // The timestamp is written once per race (shared by all horse rows of
+    // that race), so (timestamp + room_id + race_instance_id) uniquely
+    // identifies a race without merging replays.
+    const key = `${timestamp}|${roomId}|${raceInstance}`;
+    if (!byRace.has(key)) {
+      byRace.set(key, {
+        key,
+        sourceFile: fileName,
+        timestamp,
+        race_instance_id: raceInstance,
+        room_name: cell(row, 'room_name'),
+        room_id: roomId,
+        race_start_time: cell(row, 'race_start_time'),
+        entry_count: cell(row, 'entry_count'),
+        weather: cell(row, 'weather'),
+        ground_condition: cell(row, 'ground_condition'),
+        season: cell(row, 'season'),
+        scenario_id: cell(row, 'scenario_id'),
+        horses: []
+      });
+    }
+    const race = byRace.get(key);
+    race.horses.push({
+      finish_order: parseInt(cell(row, 'finish_order')) || 0,
+      finish_time: parseFloat(cell(row, 'finish_time')) || 0,
+      last_spurt_dist: parseFloat(cell(row, 'last_spurt_dist')) || 0,
+      trainer_name: cell(row, 'trainer_name'),
+      viewer_id: cell(row, 'viewer_id'),
+      chara_name: cell(row, 'chara_name'),
+      chara_id: cell(row, 'chara_id'),
+      card_id: cell(row, 'card_id'),
+      running_style: cell(row, 'running_style'),
+      speed: parseInt(cell(row, 'speed')) || 0,
+      stamina: parseInt(cell(row, 'stamina')) || 0,
+      power: parseInt(cell(row, 'power')) || 0,
+      guts: parseInt(cell(row, 'guts')) || 0,
+      wisdom: parseInt(cell(row, 'wisdom')) || 0,
+      final_grade: cell(row, 'final_grade'),
+      rank_score: parseInt(cell(row, 'rank_score')) || 0,
+      fans: parseInt(cell(row, 'fans')) || 0,
+      wins: parseInt(cell(row, 'wins')) || 0,
+      aptitudes: {
+        turf: cell(row, 'turf'), dirt: cell(row, 'dirt'),
+        short: cell(row, 'short'), mile: cell(row, 'mile'),
+        mid: cell(row, 'mid'), long: cell(row, 'long'),
+        nige: cell(row, 'nige'), senko: cell(row, 'senko'),
+        sashi: cell(row, 'sashi'), oikomi: cell(row, 'oikomi')
+      },
+      skills: (cell(row, 'skills') || '').split('|').map(s => s.trim()).filter(Boolean)
+    });
+  }
+
+  // Sort horses by finish order and push each new race
+  let added = 0;
+  for (const race of byRace.values()) {
+    race.horses.sort((a, b) => a.finish_order - b.finish_order);
+    // Determine "self" — the row where trainer_name appears most across this file's races
+    allRaces.push(race);
+    added++;
+  }
+  return added;
+}
+
+function onRacesChanged() {
+  document.getElementById('uploadSection').style.display = 'none';
+  document.getElementById('raceSection').style.display = 'block';
+
+  // Sort races by timestamp descending (newest first)
+  allRaces.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+  // Populate selector
+  const sel = document.getElementById('raceSelector');
+  sel.innerHTML = allRaces.map((race, i) => {
+    const ts = race.timestamp || '(no timestamp)';
+    const room = race.room_name ? ` — ${race.room_name}` : (race.room_id ? ` — Room ${race.room_id}` : '');
+    const top = race.horses[0];
+    const topTxt = top ? ` — 1st: ${top.chara_name} (${top.trainer_name})` : '';
+    return `<option value="${i}">${ts}${room}${topTxt}</option>`;
+  }).join('');
+  sel.value = Math.min(activeRaceIndex, allRaces.length - 1);
+  activeRaceIndex = parseInt(sel.value) || 0;
+
+  renderActiveRace();
+}
+
+document.getElementById('raceSelector').addEventListener('change', e => {
+  activeRaceIndex = parseInt(e.target.value);
+  renderActiveRace();
+});
+
+document.getElementById('raceSearch').addEventListener('input', () => renderActiveRace());
+
+document.getElementById('addMoreBtnRace').addEventListener('click', () => {
+  document.getElementById('addMoreInput').click();
+});
+
+function aptClass(grade) {
+  return `apt-${(grade || '').toUpperCase()}`;
+}
+
+function formatFinishTime(seconds) {
+  if (!seconds) return '';
+  const m = Math.floor(seconds / 60);
+  const s = (seconds - m * 60);
+  if (m > 0) return `${m}:${s.toFixed(2).padStart(5, '0')}`;
+  return s.toFixed(2);
+}
+
+function renderActiveRace() {
+  const race = allRaces[activeRaceIndex];
+  if (!race) return;
+
+  document.getElementById('raceHeaderMeta').textContent =
+    `${allRaces.length} race${allRaces.length === 1 ? '' : 's'} loaded`;
+
+  // Race info panel
+  const weather = WEATHER_LABELS[race.weather] || race.weather || '—';
+  const ground = GROUND_LABELS[race.ground_condition] || race.ground_condition || '—';
+  const season = SEASON_LABELS[race.season] || race.season || '—';
+
+  document.getElementById('raceInfo').innerHTML = `
+    <div class="race-info-item"><span>Timestamp:</span> <b>${race.timestamp || '—'}</b></div>
+    ${race.room_name ? `<div class="race-info-item"><span>Room:</span> <b>${race.room_name}</b></div>` : ''}
+    ${race.room_id ? `<div class="race-info-item"><span>Room ID:</span> <b>${race.room_id}</b></div>` : ''}
+    <div class="race-info-item"><span>Entries:</span> <b>${race.entry_count || race.horses.length}</b></div>
+    <div class="race-info-item"><span>Weather:</span> <b>${weather}</b></div>
+    <div class="race-info-item"><span>Ground:</span> <b>${ground}</b></div>
+    <div class="race-info-item"><span>Season:</span> <b>${season}</b></div>
+    ${race.scenario_id ? `<div class="race-info-item"><span>Scenario:</span> <b>${race.scenario_id}</b></div>` : ''}
+  `;
+
+  // Determine "self" trainer from the most common trainer across all loaded races
+  // (the user's trainer should appear in every race they've logged)
+  const trainerCounts = {};
+  allRaces.forEach(r => r.horses.forEach(h => {
+    if (h.trainer_name) trainerCounts[h.trainer_name] = (trainerCounts[h.trainer_name] || 0) + 1;
+  }));
+  const selfTrainer = Object.keys(trainerCounts).sort((a, b) => trainerCounts[b] - trainerCounts[a])[0];
+
+  const search = (document.getElementById('raceSearch').value || '').toLowerCase();
+
+  const horses = race.horses.filter(h => {
+    if (!search) return true;
+    const hay = [
+      h.chara_name, h.trainer_name, h.running_style, h.final_grade,
+      ...(h.skills || [])
+    ].join(' ').toLowerCase();
+    return hay.includes(search);
+  });
+
+  const firstTime = race.horses[0] ? race.horses[0].finish_time : 0;
+
+  const tbody = document.getElementById('raceTableBody');
+  tbody.innerHTML = horses.map(h => {
+    const gap = h.finish_time && firstTime ? (h.finish_time - firstTime) : 0;
+    const style = STYLE_LABELS[h.running_style] || h.running_style;
+    const isSelf = h.trainer_name && h.trainer_name === selfTrainer;
+    const badgeClass = h.finish_order <= 3 ? `finish-${h.finish_order}` : '';
+    const apt = h.aptitudes;
+    const skillChips = (h.skills || []).map(s => `<span class="skill-chip">${escapeHtml(s)}</span>`).join('');
+
+    return `<tr class="${isSelf ? 'self-row' : ''}">
+      <td><span class="finish-badge ${badgeClass}">${h.finish_order}</span></td>
+      <td>
+        <div class="race-horse-name">${escapeHtml(h.chara_name || '')}</div>
+        <div class="race-horse-trainer">${escapeHtml(h.trainer_name || '')}${h.final_grade ? ` · Grade ${h.final_grade}` : ''}</div>
+      </td>
+      <td><span class="race-style-badge style-${h.running_style}">${style || ''}</span></td>
+      <td>
+        <div>${formatFinishTime(h.finish_time)}</div>
+        ${gap > 0 ? `<div style="font-size:11px;color:var(--text-dim)">+${gap.toFixed(2)}s</div>` : ''}
+      </td>
+      <td style="color:${STAT_COLORS.SPD}">${h.speed || ''}</td>
+      <td style="color:${STAT_COLORS.STA}">${h.stamina || ''}</td>
+      <td style="color:${STAT_COLORS.POW}">${h.power || ''}</td>
+      <td style="color:${STAT_COLORS.GUT}">${h.guts || ''}</td>
+      <td style="color:${STAT_COLORS.INT}">${h.wisdom || ''}</td>
+      <td>${(h.rank_score || 0).toLocaleString()}</td>
+      <td>${(h.fans || 0).toLocaleString()}</td>
+      <td>
+        <div class="apt-grid">
+          <div class="apt-cell"><span class="apt-label">Turf</span><span class="apt-val ${aptClass(apt.turf)}">${apt.turf}</span></div>
+          <div class="apt-cell"><span class="apt-label">Dirt</span><span class="apt-val ${aptClass(apt.dirt)}">${apt.dirt}</span></div>
+          <div class="apt-cell"><span class="apt-label">Sprint</span><span class="apt-val ${aptClass(apt.short)}">${apt.short}</span></div>
+          <div class="apt-cell"><span class="apt-label">Mile</span><span class="apt-val ${aptClass(apt.mile)}">${apt.mile}</span></div>
+          <div class="apt-cell"><span class="apt-label">Mid</span><span class="apt-val ${aptClass(apt.mid)}">${apt.mid}</span></div>
+          <div class="apt-cell"><span class="apt-label">Long</span><span class="apt-val ${aptClass(apt.long)}">${apt.long}</span></div>
+          <div class="apt-cell"><span class="apt-label">Run</span><span class="apt-val ${aptClass(apt.nige)}">${apt.nige}</span></div>
+          <div class="apt-cell"><span class="apt-label">Lead</span><span class="apt-val ${aptClass(apt.senko)}">${apt.senko}</span></div>
+          <div class="apt-cell"><span class="apt-label">Btwn</span><span class="apt-val ${aptClass(apt.sashi)}">${apt.sashi}</span></div>
+          <div class="apt-cell"><span class="apt-label">Chase</span><span class="apt-val ${aptClass(apt.oikomi)}">${apt.oikomi}</span></div>
+        </div>
+      </td>
+      <td class="skills-cell">${skillChips}</td>
+    </tr>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function filterBySearch(items, searchId, searchFn) {
+  const q = (document.getElementById(searchId)?.value || '').toLowerCase();
+  if (!q) return items;
+  return items.filter(item => searchFn(item).toLowerCase().includes(q));
+}
+
+function renderSupportCards() {
+  const cards = accountData.support_cards || [];
+  document.getElementById('supportCount').textContent = cards.length;
+  let filtered = filterBySearch(cards, 'supportSearch', c => c.name || '');
+  filtered = sortData(filtered, 'supportTable', (c, key) => {
+    if (key === 'name') return c.name || '';
+    if (key === 'lb') return c.limit_break_count || 0;
+    if (key === 'exp') return c.exp || 0;
+    if (key === 'fav') return c.favorite ? 1 : 0;
+    if (key === 'stock') return c.stock || 0;
+    return 0;
+  });
+  document.getElementById('supportTableBody').innerHTML = filtered.map(c => `<tr>
+    <td class="card-name">${c.name || c.support_card_id}</td>
+    <td><span class="lb-badge lb-${c.limit_break_count || 0}">LB${c.limit_break_count || 0}</span></td>
+    <td>${(c.exp || 0).toLocaleString()}</td>
+    <td>${c.favorite ? 'Yes' : ''}</td>
+    <td>${c.stock || ''}</td>
+  </tr>`).join('');
+}
+
+function renderCharacterCards() {
+  const cards = accountData.character_cards || [];
+  document.getElementById('cardCount').textContent = cards.length;
+  let filtered = filterBySearch(cards, 'cardSearch', c => `${c.character || ''} ${c.outfit || ''}`);
+  filtered = sortData(filtered, 'cardTable', (c, key) => {
+    if (key === 'character') return c.character || '';
+    if (key === 'outfit') return c.outfit || '';
+    if (key === 'rarity') return c.rarity || 0;
+    if (key === 'talent') return c.talent_level || 0;
+    return 0;
+  });
+  document.getElementById('cardTableBody').innerHTML = filtered.map(c => `<tr>
+    <td>${c.character || c.card_id}</td>
+    <td>${c.outfit || ''}</td>
+    <td><span class="rarity-badge rarity-${c.rarity || 0}">${'★'.repeat(c.rarity || 0)}</span></td>
+    <td>${c.talent_level || 0}</td>
+  </tr>`).join('');
+}
+
+function renderCharacters() {
+  const chars = accountData.characters || [];
+  document.getElementById('charaCount').textContent = chars.length;
+  let filtered = filterBySearch(chars, 'charaSearch', c => c.name || '');
+  filtered = sortData(filtered, 'charaTable', (c, key) => {
+    if (key === 'name') return c.name || '';
+    if (key === 'training_num') return c.training_num || 0;
+    if (key === 'fan') return c.fan || 0;
+    if (key === 'max_grade') return c.max_grade || 0;
+    if (key === 'love_point') return c.love_point || 0;
+    return 0;
+  });
+  document.getElementById('charaTableBody').innerHTML = filtered.map(c => `<tr>
+    <td>${c.name || c.chara_id}</td>
+    <td>${(c.training_num || 0).toLocaleString()}</td>
+    <td>${(c.fan || 0).toLocaleString()}</td>
+    <td>${c.max_grade || 0}</td>
+    <td>${(c.love_point || 0).toLocaleString()}</td>
+  </tr>`).join('');
+}
+
+function renderTrainedCharas() {
+  const trained = accountData.raised_characters || [];
+  document.getElementById('trainedCount').textContent = trained.length;
+  let filtered = filterBySearch(trained, 'trainedSearch', c => `${c.character || ''} ${c.outfit || ''} ${c.running_style || ''}`);
+  filtered = sortData(filtered, 'trainedTable', (c, key) => {
+    if (key === 'character') return c.character || '';
+    if (key === 'outfit') return c.outfit || '';
+    if (key === 'rank_score') return c.rank_score || 0;
+    if (key === 'speed') return c.stats?.speed || 0;
+    if (key === 'stamina') return c.stats?.stamina || 0;
+    if (key === 'power') return c.stats?.power || 0;
+    if (key === 'guts') return c.stats?.guts || 0;
+    if (key === 'wisdom') return c.stats?.wisdom || 0;
+    if (key === 'total') {
+      const s = c.stats || {};
+      return (s.speed || 0) + (s.stamina || 0) + (s.power || 0) + (s.guts || 0) + (s.wisdom || 0);
+    }
+    if (key === 'style') return c.running_style || '';
+    if (key === 'skills') return c.skill_count || 0;
+    return 0;
+  });
+  document.getElementById('trainedTableBody').innerHTML = filtered.map(c => {
+    const s = c.stats || {};
+    const total = (s.speed || 0) + (s.stamina || 0) + (s.power || 0) + (s.guts || 0) + (s.wisdom || 0);
+    return `<tr>
+      <td>${c.character || c.card_id}</td>
+      <td>${c.outfit || ''}</td>
+      <td>${(c.rank_score || 0).toLocaleString()}</td>
+      <td style="color:${STAT_COLORS.SPD}">${s.speed || 0}</td>
+      <td style="color:${STAT_COLORS.STA}">${s.stamina || 0}</td>
+      <td style="color:${STAT_COLORS.POW}">${s.power || 0}</td>
+      <td style="color:${STAT_COLORS.GUT}">${s.guts || 0}</td>
+      <td style="color:${STAT_COLORS.INT}">${s.wisdom || 0}</td>
+      <td style="font-weight:700">${total.toLocaleString()}</td>
+      <td>${c.running_style || ''}</td>
+      <td>${c.skill_count || 0}</td>
+    </tr>`;
+  }).join('');
 }
 </script>
 </body>
