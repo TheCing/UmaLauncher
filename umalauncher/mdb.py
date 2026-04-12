@@ -291,6 +291,43 @@ def get_skill_name_dict(force=False):
 
     return SKILL_NAME_DICT
 
+SKILL_META_DICT = {}
+def get_skill_meta_dict(force=False):
+    """Returns {skill_id: (grade_value, group_id, rarity)} for every skill in skill_data.
+
+    Unlike `get_skill_cost_grade_dict` this does not join against
+    `single_mode_skill_need_point`, so it includes unique, evolution, and other
+    non-purchasable skills — useful when scoring already-owned skills on a horse.
+    """
+    global SKILL_META_DICT
+    if force or not SKILL_META_DICT:
+        with Connection() as (_, cursor):
+            cursor.execute(
+                """SELECT id, grade_value, group_id, rarity FROM skill_data"""
+            )
+            rows = cursor.fetchall()
+        SKILL_META_DICT.update({row[0]: (row[1], row[2], row[3]) for row in rows})
+    return SKILL_META_DICT
+
+SKILL_COST_GRADE_DICT = {}
+def get_skill_cost_grade_dict(force=False):
+    """Returns {skill_id: (need_skill_point, grade_value, group_id, rarity)} for all skills with a cost entry.
+
+    Includes ◎/○/Gold/× variants — the caller is expected to only look up skill IDs the game
+    actually offered on the buy screen (via resolution through get_skill_id_dict).
+    """
+    global SKILL_COST_GRADE_DICT
+    if force or not SKILL_COST_GRADE_DICT:
+        with Connection() as (_, cursor):
+            cursor.execute(
+                """SELECT sd.id, smsnp.need_skill_point, sd.grade_value, sd.group_id, sd.rarity
+                   FROM skill_data sd
+                   INNER JOIN single_mode_skill_need_point smsnp ON sd.id = smsnp.id"""
+            )
+            rows = cursor.fetchall()
+        SKILL_COST_GRADE_DICT.update({row[0]: (row[1], row[2], row[3], row[4]) for row in rows})
+    return SKILL_COST_GRADE_DICT
+
 SKILL_HINT_NAME_DICT = {}
 def get_skill_hint_name_dict(force=False):
     global SKILL_HINT_NAME_DICT
@@ -438,6 +475,36 @@ def get_mant_item_string_dict(force=False):
 
 
     return MANT_ITEM_STRING_DICT
+
+SUPPORT_EVENT_CHAIN_DICT = {}
+def get_support_event_chain_dict(force=False):
+    """Build a dict mapping story_id -> (support_card_id, position, total) for support card chain events."""
+    global SUPPORT_EVENT_CHAIN_DICT
+    if force or not SUPPORT_EVENT_CHAIN_DICT:
+        with Connection() as (_, cursor):
+            try:
+                cursor.execute(
+                    """SELECT support_card_id, story_id FROM single_mode_story_data
+                       WHERE support_card_id > 0
+                       ORDER BY support_card_id, story_id"""
+                )
+                rows = cursor.fetchall()
+                # Group by support_card_id
+                chains = {}
+                for support_card_id, story_id in rows:
+                    if support_card_id not in chains:
+                        chains[support_card_id] = []
+                    if story_id not in chains[support_card_id]:
+                        chains[support_card_id].append(story_id)
+                # Build lookup
+                for support_card_id, story_ids in chains.items():
+                    for i, story_id in enumerate(story_ids):
+                        SUPPORT_EVENT_CHAIN_DICT[story_id] = (support_card_id, i + 1, len(story_ids))
+            except sqlite3.OperationalError as e:
+                logger.error(f"get_support_event_chain_dict failed: {e}\n{traceback.format_exc()}")
+
+    return SUPPORT_EVENT_CHAIN_DICT
+
 
 GL_LESSON_DICT = {}
 def get_gl_lesson_dict(force=False):
@@ -738,6 +805,7 @@ UPDATE_FUNCS = [
     get_event_title_dict,
     get_race_program_name_dict,
     get_skill_name_dict,
+    get_skill_meta_dict,
     get_skill_hint_name_dict,
     get_status_name_dict,
     get_outfit_name_dict,
@@ -747,6 +815,7 @@ UPDATE_FUNCS = [
     get_gl_lesson_dict,
     get_group_card_effect_ids,
     get_skill_id_dict,
+    get_skill_cost_grade_dict,
     get_scouting_score_to_rank_dict,
     get_single_mode_unique_chara_dict,
     get_program_id_dict,
