@@ -19,7 +19,9 @@ import util
 import constants
 import mdb
 import helper_table
+import race_logger
 import training_tracker
+import account
 import horsium
 import socket
 
@@ -289,6 +291,19 @@ class CarrotJuicer:
 
             data = data['data']
 
+            # Capture account data from home screen packet
+            if isinstance(data, dict) and 'common_define' in data and 'user_info' in data:
+                account.capture_home_packet(data)
+
+            # Standalone race logging (Room Match, Champions Meet, etc.)
+            # race_horse_data_array at top level only appears in standalone races,
+            # never in training (where it's nested inside race_start_info).
+            if 'race_horse_data_array' in data and 'race_scenario' in data:
+                logger.info("Standalone race detected, logging results.")
+                race_logger.save_race_packet(data)
+                race_logger.log_race(data)
+                return
+
             # Detect leaving the initial loading screen
             # if data.get('common_define'):
                 # Game just started.
@@ -366,12 +381,13 @@ class CarrotJuicer:
                 if self.screen_state_handler:
                     self.screen_state_handler.carrotjuicer_state = screenstate_utils.make_claw_machine_state(data, self.threader.screenstate)
             
-            # Race starts.
-            if self.training_tracker and 'race_scenario' in data and 'race_start_info' in data and data['race_scenario']:
+            # Training race starts.
+            if 'race_scenario' in data and 'race_start_info' in data and data['race_scenario']:
                 self.previous_race_program_id = data['race_start_info']['program_id']
-                # Currently starting a race. Add packet to training tracker.
-                logger.debug("Race packet received.")
-                self.add_response_to_tracker(data)
+
+                if self.training_tracker:
+                    logger.debug("Training race packet received.")
+                    self.add_response_to_tracker(data)
                 return
 
 

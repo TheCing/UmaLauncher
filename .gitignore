@@ -6,3 +6,5 @@ tests/packets/*
 *.log*
 sandbox.*
 .idea/*
+appdata/*
+packet_keys_log.txt

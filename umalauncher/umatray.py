@@ -1,5 +1,7 @@
 import pystray
 import util
+import account
+import skill_recommender
 from loguru import logger
 from PIL import Image
 
@@ -21,6 +23,8 @@ class UmaTray():
         menu_items.append(pystray.MenuItem("Maximize + center game", self.threader.windowmover.try_maximize))
         menu_items.append(pystray.MenuItem("Copy screenshot to clipboard", self.threader.screenstate.screenshot_to_clipboard))
         menu_items.append(pystray.MenuItem("Export Training CSV", lambda: self.show_training_csv_dialog()))
+        menu_items.append(pystray.MenuItem("Export Account Data", lambda: self.export_account()))
+        menu_items.append(pystray.MenuItem("Recommend skill buys", lambda: self.recommend_skill_buys()))
         menu_items.append(pystray.Menu.SEPARATOR)
         menu_items.append(pystray.MenuItem("Close", lambda: close_clicked(self)))
         # if util.is_debug:
@@ -79,6 +83,30 @@ class UmaTray():
 
     def show_training_csv_dialog(self):
         self.threader.show_training_csv_dialog = True
+
+    def export_account(self):
+        filepath = account.export_account()
+        if filepath:
+            util.show_info_box("Account Export", f"Account data exported to:<br>{filepath}")
+        else:
+            util.show_info_box("Account Export", "No account data captured yet. Navigate to the home screen first.")
+
+    def recommend_skill_buys(self):
+        cj = self.threader.carrotjuicer
+        data = getattr(cj, 'last_data', None)
+        if not data or 'chara_info' not in data:
+            util.show_info_box(
+                "Skill Recommender",
+                "No training packet captured yet.<br>Open the game and navigate into a training run first."
+            )
+            return
+        try:
+            result = skill_recommender.recommend(data['chara_info'])
+        except Exception as e:
+            logger.exception("Skill recommender failed")
+            util.show_error_box_no_report("Skill Recommender", f"Failed to compute recommendation:<br>{e}")
+            return
+        util.show_info_box("Skill Recommender", skill_recommender.format_html(result))
 
 def close_clicked(tray: UmaTray):
     tray.threader.stop()
