@@ -1,4 +1,4 @@
 cd ./umalauncher
-python create_version.py
-pyinstaller threader.spec || exit /b 1
+uv run python create_version.py
+uv run pyinstaller threader.spec || exit /b 1
 cd ..
