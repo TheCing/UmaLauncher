@@ -63,6 +63,18 @@ Many thanks to Kawaii Shadowii for writing this up.
             * Race name
         * <ins>Action Type "AoharuRaces":</ins>
             * Amount of wins, losses and draws
+* **Rainbow:**
+    * Shows the number of rainbow training stacks on this turn (if any).
+* **Training Partners:**
+    * Shows which support cards/characters were present on the selected training facility.
+* **Event Source:**
+    * For SkillHint and Event actions, shows the name of the support card that triggered the event.
+* **Event Chain:**
+    * For support card events, shows the position in the event chain (e.g. "2/4" means the 2nd event out of 4 total for that support card).
+* **Available Races:**
+    * Lists the races available to enter on this turn.
+* **Rival Races:**
+    * Lists any rival/mandatory races on this turn.
 * **Value:**
     * Contains additional value-based info about the action type:
         * <ins>Action Type "Training":</ins>
