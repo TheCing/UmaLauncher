@@ -68,7 +68,6 @@
   }
   .drop-zone h2 { font-size: 18px; margin-bottom: 8px; }
   .drop-zone p { color: var(--text-dim); font-size: 14px; }
-  .drop-zone input { display: none; }
 
   /* Tabs */
   .tabs {
@@ -732,10 +731,10 @@
 </div>
 
 <div id="uploadSection" class="upload-area">
+  <input type="file" id="fileInput" accept=".csv,.json,.gz" multiple style="display:none;">
   <div class="drop-zone" id="dropZone">
     <h2 id="dropZoneTitle">Load Files</h2>
     <p id="dropZoneHint">Drop training logs (.gz), CSV (training / race results), or JSON (account) files here, or click to browse</p>
-    <input type="file" id="fileInput" accept=".csv,.json,.gz" multiple>
   </div>
 </div>
 
@@ -973,6 +972,12 @@
 </div>
 
 <script>
+window.onerror = function(msg, src, line, col, err) {
+  const el = document.getElementById('dropZoneHint');
+  if (el) el.textContent = 'JS Error (line ' + line + '): ' + msg;
+  return false;
+};
+
 const STAT_COLORS = {
   SPD: '#6bd5ff',
   STA: '#ffa36b',
@@ -1012,7 +1017,10 @@ const fileInput = document.getElementById('fileInput');
 const addMoreBtn = document.getElementById('addMoreBtn');
 const addMoreInput = document.getElementById('addMoreInput');
 
-dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('click', (e) => {
+  e.stopPropagation();
+  fileInput.click();
+});
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 dropZone.addEventListener('drop', e => {
@@ -1039,7 +1047,11 @@ function loadFiles(fileList) {
   const gzFiles = files.filter(f => lower(f.name).endsWith('.gz'));
 
   let pending = csvFiles.length + jsonFiles.length + gzFiles.length;
-  if (!pending) return;
+  if (!pending) {
+    document.getElementById('dropZoneHint').textContent =
+      'File type not recognized (' + files.map(f=>f.name).join(', ') + '). Use .csv, .json, or .gz files.';
+    return;
+  }
 
   let newTrainingRuns = 0;
   let newRaceRows = 0;
@@ -1072,6 +1084,7 @@ function loadFiles(fileList) {
         }
       } catch (err) {
         console.error('Failed to parse CSV:', file.name, err);
+        document.getElementById('dropZoneHint').textContent = 'Error parsing ' + file.name + ': ' + err.message;
       }
       pending--;
       maybeFinish();
@@ -1086,9 +1099,13 @@ function loadFiles(fileList) {
         const data = JSON.parse(e.target.result);
         if (data.support_cards || data.character_cards || data.characters) {
           loadAccountData(data);
+        } else {
+          document.getElementById('dropZoneHint').textContent =
+            file.name + ': JSON loaded but format not recognized. Use account export JSON, or CSV/GZ for training data.';
         }
       } catch (err) {
         console.error('Failed to parse JSON:', err);
+        document.getElementById('dropZoneHint').textContent = 'Error parsing ' + file.name + ': ' + err.message;
       }
       pending--;
       maybeFinish();
@@ -1120,17 +1137,27 @@ function loadFiles(fileList) {
 // --- .gz training log support ---
 
 async function decompressGzFile(file) {
-  const ds = new DecompressionStream('gzip');
-  const stream = file.stream().pipeThrough(ds);
-  const reader = stream.getReader();
-  const chunks = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
+  // Training logs are built by appending gzip members (gzip.open('ab')),
+  // so the file contains multiple concatenated gzip streams. Browser
+  // DecompressionStream only handles a single member — decompress each
+  // member separately by splitting on the gzip magic bytes (0x1f 0x8b).
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const memberStarts = [];
+  for (let i = 0; i < bytes.length - 1; i++) {
+    if (bytes[i] === 0x1f && bytes[i + 1] === 0x8b) memberStarts.push(i);
   }
-  const blob = new Blob(chunks);
-  return blob.text();
+  if (!memberStarts.length) throw new Error('Not a valid gzip file');
+  const texts = [];
+  for (let i = 0; i < memberStarts.length; i++) {
+    const start = memberStarts[i];
+    const end = i + 1 < memberStarts.length ? memberStarts[i + 1] : bytes.length;
+    const chunk = bytes.slice(start, end);
+    const ds = new DecompressionStream('gzip');
+    const response = new Response(new Blob([chunk]).stream().pipeThrough(ds));
+    texts.push(await response.text());
+  }
+  return texts.join('');
 }
 
 const SCENARIO_NAMES = {
