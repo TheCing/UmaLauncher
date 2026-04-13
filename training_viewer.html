@@ -734,8 +734,8 @@
 <div id="uploadSection" class="upload-area">
   <div class="drop-zone" id="dropZone">
     <h2 id="dropZoneTitle">Load Files</h2>
-    <p id="dropZoneHint">Drop CSV (training / race results) or JSON (account) files here, or click to browse</p>
-    <input type="file" id="fileInput" accept=".csv,.json" multiple>
+    <p id="dropZoneHint">Drop training logs (.gz), CSV (training / race results), or JSON (account) files here, or click to browse</p>
+    <input type="file" id="fileInput" accept=".csv,.json,.gz" multiple>
   </div>
 </div>
 
@@ -744,7 +744,7 @@
     <label for="runSelector">Run:</label>
     <select id="runSelector"></select>
     <button class="add-more-btn" id="addMoreBtn">+ Add More</button>
-    <input type="file" id="addMoreInput" accept=".csv,.json" multiple style="display:none;">
+    <input type="file" id="addMoreInput" accept=".csv,.json,.gz" multiple style="display:none;">
   </div>
 
   <div id="tabBar" class="tabs">
@@ -1020,17 +1020,25 @@ dropZone.addEventListener('drop', e => {
   dropZone.classList.remove('drag-over');
   if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files);
 });
-fileInput.addEventListener('change', e => { if (e.target.files.length) loadFiles(e.target.files); });
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) loadFiles(e.target.files);
+  e.target.value = '';
+});
 
 addMoreBtn.addEventListener('click', () => addMoreInput.click());
-addMoreInput.addEventListener('change', e => { if (e.target.files.length) loadFiles(e.target.files); });
+addMoreInput.addEventListener('change', e => {
+  if (e.target.files.length) loadFiles(e.target.files);
+  e.target.value = '';
+});
 
 function loadFiles(fileList) {
   const files = Array.from(fileList);
-  const csvFiles = files.filter(f => f.name.endsWith('.csv'));
-  const jsonFiles = files.filter(f => f.name.endsWith('.json'));
+  const lower = name => name.toLowerCase();
+  const csvFiles = files.filter(f => lower(f.name).endsWith('.csv'));
+  const jsonFiles = files.filter(f => lower(f.name).endsWith('.json'));
+  const gzFiles = files.filter(f => lower(f.name).endsWith('.gz'));
 
-  let pending = csvFiles.length + jsonFiles.length;
+  let pending = csvFiles.length + jsonFiles.length + gzFiles.length;
   if (!pending) return;
 
   let newTrainingRuns = 0;
@@ -1050,17 +1058,20 @@ function loadFiles(fileList) {
   csvFiles.forEach(file => {
     const reader = new FileReader();
     reader.onload = e => {
-      const text = e.target.result;
-      // Peek at first line to detect race vs training CSV
-      const firstLine = text.split('\n', 1)[0] || '';
-      const headerCells = parseCSVLine(firstLine);
-      if (isRaceCSV(headerCells)) {
-        const added = parseRaceCSV(text, file.name);
-        newRaceRows += added;
-      } else {
-        const run = parseCSV(text, file.name);
-        allRuns.push(run);
-        newTrainingRuns++;
+      try {
+        const text = e.target.result;
+        const firstLine = text.split('\n', 1)[0] || '';
+        const headerCells = parseCSVLine(firstLine);
+        if (isRaceCSV(headerCells)) {
+          const added = parseRaceCSV(text, file.name);
+          newRaceRows += added;
+        } else {
+          const run = parseCSV(text, file.name);
+          allRuns.push(run);
+          newTrainingRuns++;
+        }
+      } catch (err) {
+        console.error('Failed to parse CSV:', file.name, err);
       }
       pending--;
       maybeFinish();
@@ -1084,7 +1095,238 @@ function loadFiles(fileList) {
     };
     reader.readAsText(file, 'utf-8');
   });
+
+  gzFiles.forEach(file => {
+    decompressGzFile(file).then(text => {
+      try {
+        const run = parseGzPackets(text, file.name);
+        if (run) {
+          allRuns.push(run);
+          newTrainingRuns++;
+        }
+      } catch (err) {
+        console.error('Failed to parse .gz training log:', file.name, err);
+      }
+      pending--;
+      maybeFinish();
+    }).catch(err => {
+      console.error('Failed to decompress .gz:', file.name, err);
+      pending--;
+      maybeFinish();
+    });
+  });
 }
+
+// --- .gz training log support ---
+
+async function decompressGzFile(file) {
+  const ds = new DecompressionStream('gzip');
+  const stream = file.stream().pipeThrough(ds);
+  const reader = stream.getReader();
+  const chunks = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const blob = new Blob(chunks);
+  return blob.text();
+}
+
+const SCENARIO_NAMES = {
+  1:'URA Finals', 2:'Aoharu Cup', 3:'Grand Live', 4:'Make a New Track',
+  5:'Grand Masters', 6:"Project L'Arc", 7:'UAF Ready GO!', 8:'Across the Spring',
+  9:'Reach for the Moon', 10:'Parallel Arcs', 11:'Design Your Island',
+  12:'Yukoma Hot Springs', 13:'Beyond Dreams'
+};
+const COMMAND_NAMES = {
+  101:'Speed',105:'Stamina',102:'Power',103:'Guts',106:'Wisdom',
+  601:'Speed',602:'Stamina',603:'Power',604:'Guts',605:'Wisdom',
+  1101:'Speed',1102:'Stamina',1103:'Power',1104:'Guts',1105:'Wisdom',
+  3601:'Speed',3602:'Stamina',3603:'Power',3604:'Guts',3605:'Wisdom',
+};
+const MOTIVATION_NAMES = {5:'Very High',4:'High',3:'Normal',2:'Low',1:'Very Low'};
+
+function parseGzPackets(text, fileName) {
+  let packets;
+  try {
+    packets = JSON.parse('[' + text + ']');
+  } catch (e) {
+    console.error('JSON parse failed for .gz contents:', e);
+    return null;
+  }
+  if (!packets.length) return null;
+
+  // Walk request/response pairs (same logic as TrainingAnalyzer)
+  const actions = [];
+  let scenarioId = 0, cardId = 0, supports = [];
+  let prevAction = null, prevResp = null, lastFailRates = {};
+
+  let pi = 0;
+  while (pi < packets.length - 1) {
+    const req = packets[pi];
+    let resp = packets[pi + 1];
+    // Skip until we find a response (_direction === 1)
+    while (resp && resp._direction !== 1 && pi + 2 < packets.length) {
+      pi++;
+      resp = packets[pi + 1];
+    }
+    pi += 2;
+    if (!resp || resp._direction !== 1) continue;
+
+    let turn = 0, spd = 0, sta = 0, pow = 0, gut = 0, wiz = 0;
+    let sklpt = 0, energy = 0, mot = 0, fans = 0;
+    let skills = new Set(), hints = new Set(), statuses = new Set();
+
+    if (resp.chara_info) {
+      const ci = resp.chara_info;
+      if (!scenarioId) {
+        scenarioId = ci.scenario_id || 0;
+        cardId = ci.card_id || 0;
+        supports = (ci.support_card_array || []).map(s => s.support_card_id);
+      }
+      turn = (req.current_turn != null ? req.current_turn : ci.turn) || 0;
+      spd = ci.speed; sta = ci.stamina; pow = ci.power; gut = ci.guts; wiz = ci.wiz;
+      sklpt = ci.skill_point; energy = ci.vital; mot = ci.motivation; fans = ci.fans;
+      (ci.skill_array || []).forEach(s => skills.add(s.skill_id + ':' + s.level));
+      (ci.skill_tips_array || []).forEach(s => hints.add(s.group_id + ':' + s.rarity + ':' + s.level));
+      (ci.chara_effect_id_array || []).forEach(s => statuses.add(s));
+    } else if (resp.race_scenario && resp.race_start_info) {
+      const hd = resp.race_start_info.race_horse_data[0];
+      const common = req.single_mode_race_start_request_common || req.single_mode_race_end_request_common || req;
+      turn = common.current_turn || (prevAction ? prevAction.turn : 0);
+      spd = hd.speed; sta = hd.stamina; pow = hd.pow; gut = hd.guts; wiz = hd.wiz;
+      sklpt = prevAction ? prevAction.sklpt : 0;
+      energy = prevAction ? prevAction.energy : 0;
+      mot = hd.motivation; fans = hd.fan_count || (prevAction ? prevAction.fans : 0);
+      if (prevAction) { skills = prevAction.skills; hints = prevAction.hints; statuses = prevAction.statuses; }
+    } else {
+      continue;
+    }
+
+    // Determine action type
+    let actionType = 'Unknown', actionText = '', actionValue = '';
+    if (req.start_chara) {
+      actionType = 'Start';
+    } else if (req.continue_type) {
+      actionType = 'Continue'; actionValue = req.continue_type;
+    } else if (req.event_id && prevResp && prevResp.unchecked_event_array && prevResp.unchecked_event_array[0]) {
+      const storyId = String(prevResp.unchecked_event_array[0].story_id || '');
+      const m = storyId.match(/^80(\d{4})003$/);
+      if (m) {
+        actionType = 'SkillHint';
+        actionText = 'Chara ' + m[1];
+      } else {
+        actionType = 'Event';
+        actionText = 'Story ' + storyId;
+        actionValue = req.choice_number || '';
+      }
+    } else if (req.command_type === 1 || (req.single_mode_exec_command_request_common && req.single_mode_exec_command_request_common.command_type === 1)) {
+      actionType = 'Training';
+      const cmdId = req.command_id || (req.single_mode_exec_command_request_common && req.single_mode_exec_command_request_common.command_id);
+      actionText = COMMAND_NAMES[cmdId] || ('Cmd ' + cmdId);
+      actionValue = lastFailRates[cmdId] != null ? lastFailRates[cmdId] : '';
+    } else if (req.command_type === 7 || (req.single_mode_exec_command_request_common && req.single_mode_exec_command_request_common.command_type === 7)) {
+      actionType = 'Rest';
+    } else if (req.command_type === 3 || (req.single_mode_exec_command_request_common && req.single_mode_exec_command_request_common.command_type === 3)) {
+      actionType = 'Outing';
+    } else if (req.command_type === 8 || (req.single_mode_exec_command_request_common && req.single_mode_exec_command_request_common.command_type === 8)) {
+      actionType = 'Infirmary';
+    } else if (resp.race_scenario) {
+      actionType = 'Race';
+    } else if (resp.home_info && prevAction && prevAction.actionType === 'Race') {
+      actionType = 'AfterRace';
+    }
+
+    // Capture failure rates for next turn
+    if (resp.home_info && resp.home_info.command_info_array) {
+      lastFailRates = {};
+      resp.home_info.command_info_array.forEach(c => { lastFailRates[c.command_id] = c.failure_rate; });
+    }
+
+    // Compute deltas
+    const dspd = prevAction ? spd - prevAction.spd : 0;
+    const dsta = prevAction ? sta - prevAction.sta : 0;
+    const dpow = prevAction ? pow - prevAction.pow : 0;
+    const dgut = prevAction ? gut - prevAction.gut : 0;
+    const dwiz = prevAction ? wiz - prevAction.wiz : 0;
+    const dsklpt = prevAction ? sklpt - prevAction.sklpt : 0;
+    const denergy = prevAction ? energy - prevAction.energy : 0;
+    const dmot = prevAction ? mot - prevAction.mot : 0;
+    const dfans = prevAction ? fans - prevAction.fans : 0;
+
+    // Skill/hint/status diffs (show count only — no MDB names available)
+    const addedSkills = prevAction ? [...skills].filter(s => !prevAction.skills.has(s)).length : 0;
+    const removedSkills = prevAction ? [...prevAction.skills].filter(s => !skills.has(s)).length : 0;
+    const addedHints = prevAction ? [...hints].filter(s => !prevAction.hints.has(s)).length : 0;
+    const addedStatuses = prevAction ? [...statuses].filter(s => !prevAction.statuses.has(s)) : [];
+    const removedStatuses = prevAction ? [...prevAction.statuses].filter(s => !statuses.has(s)) : [];
+
+    const action = {
+      turn, spd, sta, pow, gut, wiz, sklpt, energy, mot, fans,
+      dspd, dsta, dpow, dgut, dwiz, dsklpt, denergy, dmot, dfans,
+      actionType, actionText, actionValue,
+      addedSkills, removedSkills, addedHints,
+      addedStatuses: addedStatuses.join('|'), removedStatuses: removedStatuses.join('|'),
+      skills, hints, statuses,
+    };
+    actions.push(action);
+    prevAction = action;
+    prevResp = resp;
+  }
+
+  if (!actions.length) return null;
+
+  // Build a run object matching parseCSV output
+  const scenario = SCENARIO_NAMES[scenarioId] || ('Scenario ' + scenarioId);
+  const chara = 'Card ' + cardId;
+  const supportStrs = [0,1,2,3,4,5].map(i => supports[i] ? String(supports[i]) : '');
+
+  const headers = [
+    'Scenario','Chara','Support 1','Support 2','Support 3','Support 4','Support 5','Support 6',
+    'Turn','Action','Text','Value','Rainbow','Training Partners',
+    'Event Source','Event Chain',
+    'SPD','STA','POW','GUT','INT','SKLPT','ERG','MOT','FAN',
+    'ΔSPD','ΔSTA','ΔPOW','ΔGUT','ΔINT','ΔSKLPT','ΔERG','ΔMOT','ΔFAN',
+    'Skills Added','Skills Removed','Skill Hints Added','Statuses Added','Statuses Removed',
+    'Available Races','Rival Races'
+  ];
+  const COL = {};
+  headers.forEach((h, i) => COL[h] = i);
+
+  const rows = actions.map(a => {
+    const r = new Array(headers.length).fill('');
+    r[COL['Scenario']] = scenario;
+    r[COL['Chara']] = chara;
+    for (let i = 0; i < 6; i++) r[COL['Support ' + (i+1)]] = supportStrs[i];
+    r[COL['Turn']] = String(a.turn);
+    r[COL['Action']] = a.actionType;
+    r[COL['Text']] = a.actionText;
+    r[COL['Value']] = String(a.actionValue);
+    r[COL['SPD']] = String(a.spd); r[COL['STA']] = String(a.sta);
+    r[COL['POW']] = String(a.pow); r[COL['GUT']] = String(a.gut);
+    r[COL['INT']] = String(a.wiz); r[COL['SKLPT']] = String(a.sklpt);
+    r[COL['ERG']] = String(a.energy);
+    r[COL['MOT']] = MOTIVATION_NAMES[a.mot] || String(a.mot);
+    r[COL['FAN']] = String(a.fans);
+    r[COL['ΔSPD']] = String(a.dspd); r[COL['ΔSTA']] = String(a.dsta);
+    r[COL['ΔPOW']] = String(a.dpow); r[COL['ΔGUT']] = String(a.dgut);
+    r[COL['ΔINT']] = String(a.dwiz); r[COL['ΔSKLPT']] = String(a.dsklpt);
+    r[COL['ΔERG']] = String(a.denergy); r[COL['ΔMOT']] = String(a.dmot);
+    r[COL['ΔFAN']] = String(a.dfans);
+    r[COL['Skills Added']] = a.addedSkills ? `+${a.addedSkills} skill(s)` : '';
+    r[COL['Skills Removed']] = a.removedSkills ? `-${a.removedSkills} skill(s)` : '';
+    r[COL['Skill Hints Added']] = a.addedHints ? `+${a.addedHints} hint(s)` : '';
+    r[COL['Statuses Added']] = a.addedStatuses;
+    r[COL['Statuses Removed']] = a.removedStatuses;
+    return r;
+  });
+
+  const name = fileName.replace(/\.gz$/i, '').replace(/_/g, ' ');
+  return { name, headers, COL, rows };
+}
+
+// --- end .gz support ---
 
 function isRaceCSV(headers) {
   return headers.includes('finish_order') &&
@@ -1094,12 +1336,12 @@ function isRaceCSV(headers) {
 
 function parseCSV(text, fileName) {
   const lines = text.split('\n').filter(l => l.trim());
+  if (!lines.length) throw new Error('CSV file is empty: ' + fileName);
   const headers = parseCSVLine(lines[0]);
   const COL = {};
   headers.forEach((h, i) => COL[h] = i);
   const rows = lines.slice(1).map(parseCSVLine);
 
-  // Derive a display name
   let name = fileName.replace(/\.csv$/i, '').replace(/_/g, ' ');
   return { name, headers, COL, rows };
 }
@@ -1149,7 +1391,7 @@ document.getElementById('runSelector').addEventListener('change', e => {
 
 function renderActiveRun() {
   const run = allRuns[activeRunIndex];
-  if (!run) return;
+  if (!run || !run.rows.length) return;
 
   document.getElementById('headerMeta').textContent =
     `${col(run.rows[0], 'Chara', run.COL)} — ${col(run.rows[0], 'Scenario', run.COL)}`;
