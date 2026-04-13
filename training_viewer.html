@@ -1097,12 +1097,20 @@ function loadFiles(fileList) {
     const reader = new FileReader();
     reader.onload = e => {
       try {
-        const data = JSON.parse(e.target.result);
-        if (data.support_cards || data.character_cards || data.characters) {
+        const text = e.target.result;
+        // Training log JSONs are comma-separated objects (not a JSON array).
+        // Try wrapping with [] first; if that fails, parse as-is.
+        let data;
+        try { data = JSON.parse(text); } catch(_) { data = JSON.parse('[' + text + ']'); }
+        if (Array.isArray(data) && data.length && data[0]._direction != null) {
+          // Training log packets
+          const run = parseGzPackets('[' + text + ']', file.name);
+          if (run) { allRuns.push(run); newTrainingRuns++; }
+        } else if (data.support_cards || data.character_cards || data.characters) {
           loadAccountData(data);
         } else {
           document.getElementById('dropZoneHint').textContent =
-            file.name + ': JSON loaded but format not recognized. Use account export JSON, or CSV/GZ for training data.';
+            file.name + ': JSON format not recognized. Use training logs, account export, or CSV.';
         }
       } catch (err) {
         console.error('Failed to parse JSON:', err);
@@ -1176,12 +1184,18 @@ const COMMAND_NAMES = {
 };
 const MOTIVATION_NAMES = {5:'Very High',4:'High',3:'Normal',2:'Low',1:'Very Low'};
 
-function parseGzPackets(text, fileName) {
+function parseGzPackets(textOrJson, fileName) {
   let packets;
   try {
-    packets = JSON.parse('[' + text + ']');
+    // Accept either a pre-formed JSON string (like "[{...},{...}]")
+    // or raw comma-separated objects (like "{...},{...}")
+    if (typeof textOrJson === 'string') {
+      try { packets = JSON.parse(textOrJson); } catch(_) { packets = JSON.parse('[' + textOrJson + ']'); }
+    } else {
+      packets = textOrJson;
+    }
   } catch (e) {
-    console.error('JSON parse failed for .gz contents:', e);
+    console.error('JSON parse failed for training log:', e);
     return null;
   }
   if (!packets.length) return null;

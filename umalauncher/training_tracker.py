@@ -92,7 +92,15 @@ class TrainingTracker():
 
 
     def get_sav_path(self):
-        return self.get_training_path(".gz")
+        # New runs save as .json; old .gz files are still loadable.
+        json_path = self.get_training_path(".json")
+        gz_path = self.get_training_path(".gz")
+        # If we already started writing to one format, keep using it.
+        if os.path.exists(json_path):
+            return json_path
+        if os.path.exists(gz_path):
+            return gz_path
+        return json_path  # default for new runs
 
 
     def get_csv_path(self):
@@ -100,22 +108,34 @@ class TrainingTracker():
 
 
     def write_packet(self, packet: dict):
-        # Convert to json string and save with gzip
-        # Append to gzip if file exists
-        is_first = not os.path.exists(self.get_sav_path())
+        path = self.get_sav_path()
+        is_first = not os.path.exists(path)
         if packet is not None:
-            with gzip.open(self.get_sav_path(), 'ab') as f:
-                if not is_first:
-                    f.write(','.encode('utf-8'))
-                f.write(json.dumps(packet, ensure_ascii=False).encode('utf-8'))
+            if path.endswith('.gz'):
+                # Legacy format: append gzip member
+                with gzip.open(path, 'ab') as f:
+                    if not is_first:
+                        f.write(','.encode('utf-8'))
+                    f.write(json.dumps(packet, ensure_ascii=False).encode('utf-8'))
+            else:
+                # New format: plain JSON, comma-separated objects
+                with open(path, 'a', encoding='utf-8') as f:
+                    if not is_first:
+                        f.write(',')
+                    json.dump(packet, f, ensure_ascii=False)
 
 
     def load_packets(self):
         packet_list = []
         logger.debug("Loading packets from file")
-        if os.path.exists(self.get_sav_path()):
-            with gzip.open(self.get_sav_path(), 'rb') as f:
-                packet_list = json.loads(f"[{f.read().decode('utf-8')}]")
+        path = self.get_sav_path()
+        if os.path.exists(path):
+            if path.endswith('.gz'):
+                with gzip.open(path, 'rb') as f:
+                    packet_list = json.loads(f"[{f.read().decode('utf-8')}]")
+            else:
+                with open(path, 'r', encoding='utf-8') as f:
+                    packet_list = json.loads(f"[{f.read()}]")
         logger.debug(f"Amount of packets loaded: {len(packet_list)}")
         return packet_list
 
@@ -1006,8 +1026,8 @@ def training_csv_dialog(training_paths=None):
                 InitialDir=util.TRAINING_LOGS_FOLDER,
                 Title="Select training log(s)",
                 Flags=win32con.OFN_ALLOWMULTISELECT | win32con.OFN_FILEMUSTEXIST | win32con.OFN_EXPLORER | win32con.OFN_NOCHANGEDIR,
-                DefExt="gz",
-                Filter="Training logs (*.gz)\0*.gz\0\0",
+                DefExt="json",
+                Filter="Training logs (*.json;*.gz)\0*.json;*.gz\0\0",
                 MaxFile=2147483647
             )
             # os.chdir(cwd_before)
@@ -1026,11 +1046,9 @@ def training_csv_dialog(training_paths=None):
             util.show_warning_box("Error", "No file(s) selected.")
             return
 
-    # Check if all files end with .gz
-    # If not, show error message
     for training_path in training_paths:
-        if not training_path.endswith(".gz"):
-            util.show_warning_box("Error", "All chosen files must be .gz (gzip) files.")
+        if not training_path.endswith(".gz") and not training_path.endswith(".json"):
+            util.show_warning_box("Error", "All chosen files must be .json or .gz training log files.")
             return
 
     try:
