@@ -5,7 +5,7 @@ block_cipher = None
 
 a = Analysis(
     ['threader.py'],
-    pathex=['venv\\Lib\\site-packages'],
+    pathex=['../.venv/Lib/site-packages'],
     binaries=[],
     datas=[('./_assets/icon/default.ico', '.'), ('./_assets/icon/connecting.ico', '.'), ('./_assets/icon/connected.ico', '.')],
     hiddenimports=[],
@@ -22,7 +22,7 @@ a.datas += Tree('./_assets', prefix='_assets')
 a.datas += Tree('./external', prefix='external')
 a.datas += Tree('./ff_profile', prefix='ff_profile')
 
-a.datas += Tree('../venv/Lib/site-packages/google', prefix='external/google')
+a.datas += Tree('../.venv/Lib/site-packages/google', prefix='external/google')
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
