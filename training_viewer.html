@@ -1136,37 +1136,65 @@ function loadFiles(fileList) {
 
 // --- .gz training log support ---
 
-async function decompressGzFile(file) {
-  // Training logs are built by appending gzip members (gzip.open('ab')),
-  // so the file contains multiple concatenated gzip streams. Browser
-  // DecompressionStream only handles a single member — decompress each
-  // member separately by splitting on the gzip magic bytes (0x1f 0x8b).
-  // Avoids Response/fetch APIs since they don't work on file:// pages.
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  const memberStarts = [];
-  for (let i = 0; i < bytes.length - 1; i++) {
-    if (bytes[i] === 0x1f && bytes[i + 1] === 0x8b) memberStarts.push(i);
-  }
-  if (!memberStarts.length) throw new Error('Not a valid gzip file');
+async function decompressGzChunk(bytes) {
+  // Decompress a single gzip member from the start of bytes.
+  // Extra trailing bytes (from subsequent members) cause an error
+  // after the first member is fully decompressed — we keep whatever
+  // output we got before the error. Returns '' if nothing decompresses.
+  const ds = new DecompressionStream('gzip');
+  const writer = ds.writable.getWriter();
+  const reader = ds.readable.getReader();
   const decoder = new TextDecoder();
-  const texts = [];
-  for (let i = 0; i < memberStarts.length; i++) {
-    const start = memberStarts[i];
-    const end = i + 1 < memberStarts.length ? memberStarts[i + 1] : bytes.length;
-    const chunk = bytes.slice(start, end);
-    const ds = new DecompressionStream('gzip');
-    const writer = ds.writable.getWriter();
-    writer.write(chunk);
-    writer.close();
-    const reader = ds.readable.getReader();
-    const parts = [];
+  writer.write(bytes).catch(() => {});
+  writer.close().catch(() => {});
+  const parts = [];
+  try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      parts.push(value);
+      parts.push(decoder.decode(value, { stream: true }));
     }
-    texts.push(parts.map(p => decoder.decode(p, { stream: true })).join(''));
+  } catch(e) {
+    // Expected for multi-member: "junk after end of compressed data"
+  }
+  return parts.join('');
+}
+
+async function decompressGzFile(file) {
+  // Training logs are built by appending gzip members (gzip.open('ab')),
+  // creating multiple concatenated gzip streams. DecompressionStream only
+  // handles one member, so we find each member boundary (0x1f 0x8b 0x08)
+  // and decompress from that point, letting the decompressor stop at the
+  // member's end and ignoring the trailing bytes error.
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  // Try single-member first (no splitting needed)
+  const single = await decompressGzChunk(bytes);
+  // Quick check: if we got a reasonable result and no members remain, done.
+  // We detect multi-member by looking for more gzip headers after offset 0.
+  let hasMultiple = false;
+  for (let i = 1; i < bytes.length - 2; i++) {
+    if (bytes[i] === 0x1f && bytes[i+1] === 0x8b && bytes[i+2] === 0x08) {
+      hasMultiple = true;
+      break;
+    }
+  }
+  if (!hasMultiple) return single;
+
+  // Multi-member: find all potential gzip starts and decompress each.
+  // Each call gets all remaining bytes — the decompressor reads one
+  // member and errors on the rest, which we catch and keep the output.
+  const starts = [0];
+  for (let i = 1; i < bytes.length - 2; i++) {
+    if (bytes[i] === 0x1f && bytes[i+1] === 0x8b && bytes[i+2] === 0x08) {
+      starts.push(i);
+    }
+  }
+  const texts = [];
+  for (const start of starts) {
+    const text = await decompressGzChunk(bytes.slice(start));
+    if (text) texts.push(text);
   }
   return texts.join('');
 }
