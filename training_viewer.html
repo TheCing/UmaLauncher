@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Uma Viewer</title>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako.min.js"></script>
 <style>
   :root {
     --bg: #1a1a2e;
@@ -1136,67 +1137,10 @@ function loadFiles(fileList) {
 
 // --- .gz training log support ---
 
-async function decompressGzChunk(bytes) {
-  // Decompress a single gzip member from the start of bytes.
-  // Extra trailing bytes (from subsequent members) cause an error
-  // after the first member is fully decompressed — we keep whatever
-  // output we got before the error. Returns '' if nothing decompresses.
-  const ds = new DecompressionStream('gzip');
-  const writer = ds.writable.getWriter();
-  const reader = ds.readable.getReader();
-  const decoder = new TextDecoder();
-  writer.write(bytes).catch(() => {});
-  writer.close().catch(() => {});
-  const parts = [];
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      parts.push(decoder.decode(value, { stream: true }));
-    }
-  } catch(e) {
-    // Expected for multi-member: "junk after end of compressed data"
-  }
-  return parts.join('');
-}
-
 async function decompressGzFile(file) {
-  // Training logs are built by appending gzip members (gzip.open('ab')),
-  // creating multiple concatenated gzip streams. DecompressionStream only
-  // handles one member, so we find each member boundary (0x1f 0x8b 0x08)
-  // and decompress from that point, letting the decompressor stop at the
-  // member's end and ignoring the trailing bytes error.
+  if (typeof pako === 'undefined') throw new Error('pako library not loaded (offline?). Use CSV export instead.');
   const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-
-  // Try single-member first (no splitting needed)
-  const single = await decompressGzChunk(bytes);
-  // Quick check: if we got a reasonable result and no members remain, done.
-  // We detect multi-member by looking for more gzip headers after offset 0.
-  let hasMultiple = false;
-  for (let i = 1; i < bytes.length - 2; i++) {
-    if (bytes[i] === 0x1f && bytes[i+1] === 0x8b && bytes[i+2] === 0x08) {
-      hasMultiple = true;
-      break;
-    }
-  }
-  if (!hasMultiple) return single;
-
-  // Multi-member: find all potential gzip starts and decompress each.
-  // Each call gets all remaining bytes — the decompressor reads one
-  // member and errors on the rest, which we catch and keep the output.
-  const starts = [0];
-  for (let i = 1; i < bytes.length - 2; i++) {
-    if (bytes[i] === 0x1f && bytes[i+1] === 0x8b && bytes[i+2] === 0x08) {
-      starts.push(i);
-    }
-  }
-  const texts = [];
-  for (const start of starts) {
-    const text = await decompressGzChunk(bytes.slice(start));
-    if (text) texts.push(text);
-  }
-  return texts.join('');
+  return pako.ungzip(new Uint8Array(buffer), { to: 'string' });
 }
 
 const SCENARIO_NAMES = {
