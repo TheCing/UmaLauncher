@@ -1141,6 +1141,7 @@ async function decompressGzFile(file) {
   // so the file contains multiple concatenated gzip streams. Browser
   // DecompressionStream only handles a single member — decompress each
   // member separately by splitting on the gzip magic bytes (0x1f 0x8b).
+  // Avoids Response/fetch APIs since they don't work on file:// pages.
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   const memberStarts = [];
@@ -1148,14 +1149,24 @@ async function decompressGzFile(file) {
     if (bytes[i] === 0x1f && bytes[i + 1] === 0x8b) memberStarts.push(i);
   }
   if (!memberStarts.length) throw new Error('Not a valid gzip file');
+  const decoder = new TextDecoder();
   const texts = [];
   for (let i = 0; i < memberStarts.length; i++) {
     const start = memberStarts[i];
     const end = i + 1 < memberStarts.length ? memberStarts[i + 1] : bytes.length;
     const chunk = bytes.slice(start, end);
     const ds = new DecompressionStream('gzip');
-    const response = new Response(new Blob([chunk]).stream().pipeThrough(ds));
-    texts.push(await response.text());
+    const writer = ds.writable.getWriter();
+    writer.write(chunk);
+    writer.close();
+    const reader = ds.readable.getReader();
+    const parts = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
+    }
+    texts.push(parts.map(p => decoder.decode(p, { stream: true })).join(''));
   }
   return texts.join('');
 }
