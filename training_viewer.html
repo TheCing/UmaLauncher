@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Uma Viewer</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root {
     --bg: #1a1a2e;
@@ -1419,6 +1419,12 @@ function renderDashboard(run) {
   dashboardCharts.forEach(c => c.destroy());
   dashboardCharts = [];
 
+  if (typeof Chart === 'undefined') {
+    document.getElementById('chartsGrid').innerHTML =
+      '<p style="color:var(--text-dim);padding:20px;">Charts unavailable — Chart.js failed to load (offline?). Stats and Turn Explorer still work.</p>';
+    return;
+  }
+
   const first = rows[0];
   const last = rows[rows.length - 1];
 
@@ -1782,6 +1788,7 @@ function renderExplorer(run) {
 let multiRunChart = null;
 function renderMultiRunSummary() {
   if (allRuns.length < 2) return;
+  if (typeof Chart === 'undefined') return;
 
   // Compute per-run stats
   const runStats = allRuns.map(run => {
