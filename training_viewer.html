@@ -1139,8 +1139,27 @@ function loadFiles(fileList) {
 
 async function decompressGzFile(file) {
   if (typeof pako === 'undefined') throw new Error('pako library not loaded (offline?). Use CSV export instead.');
-  const buffer = await file.arrayBuffer();
-  return pako.ungzip(new Uint8Array(buffer), { to: 'string' });
+  const data = new Uint8Array(await file.arrayBuffer());
+  const decoder = new TextDecoder();
+  const texts = [];
+  let offset = 0;
+  while (offset < data.length - 10) {
+    // Parse gzip header to find where deflate data starts
+    if (data[offset] !== 0x1f || data[offset+1] !== 0x8b || data[offset+2] !== 0x08) break;
+    const flg = data[offset + 3];
+    let pos = offset + 10;
+    if (flg & 0x04) { pos += 2 + (data[pos] | (data[pos+1] << 8)); } // FEXTRA
+    if (flg & 0x08) { while (data[pos++] !== 0); } // FNAME
+    if (flg & 0x10) { while (data[pos++] !== 0); } // FCOMMENT
+    if (flg & 0x02) { pos += 2; } // FHCRC
+    // Inflate the raw deflate stream
+    const inf = new pako.Inflate({ raw: true });
+    inf.push(data.subarray(pos));
+    if (inf.result && inf.result.length) texts.push(decoder.decode(inf.result));
+    // Skip past: deflate data consumed + 8-byte trailer (CRC32 + ISIZE)
+    offset = pos + inf.strm.total_in + 8;
+  }
+  return texts.join('');
 }
 
 const SCENARIO_NAMES = {
