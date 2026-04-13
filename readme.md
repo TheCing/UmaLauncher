@@ -33,11 +33,18 @@ That's it. Launch Uma Musume through Steam as normal and Uma Launcher will detec
 
 ### Troubleshooting
 
-- **"Could not bind to 127.0.0.1:17229"** — Another instance of Uma Launcher is still running. Close it from the tray or run in PowerShell:
-  ```powershell
-  Get-Process | Where-Object { $_.ProcessName -like '*UmaLauncher*' } | Stop-Process -Force
-  ```
-- **Game not detected** — Make sure CarrotBlender is installed correctly and the game is running. Right-click the tray icon and check Preferences to verify the game install path.
+| Problem | Check |
+|---------|-------|
+| Uma Launcher won't start / crashes on launch | Make sure you're running Windows 10 or 11. Try running as Administrator. |
+| "Could not bind to 127.0.0.1:17229" | Another instance is already running. Close it from the tray icon, or kill all instances in PowerShell: `Get-Process \| Where-Object { $_.ProcessName -like '*UmaLauncher*' } \| Stop-Process -Force` |
+| No training event helper / no features working | You need **CarrotBlender** installed (see Step 1 above). Without it, Uma Launcher can't read game data. |
+| Event helper not showing up | Make sure "Enable CarrotJuicer" is checked in Preferences. Also check that your browser (Edge/Chrome/Firefox) is working. |
+| Game install path wrong / game not detected | Right-click tray icon > Preferences > set **Game install path** to the folder containing `umamusume.exe`. |
+| "Recommend skill buys" says no data | You need to be inside a training run. The game must have sent at least one packet — navigate through a turn first. |
+| "Export Account Data" says no data | Go to the home screen in-game first. Uma Launcher captures it from the home screen packet. |
+| Training logs not being saved | Make sure **Track trainings** is enabled in Preferences. |
+| Training viewer won't load `.gz` files | Old `.gz` log format has browser compatibility issues. Start a new run (saves as `.json`) or use **Export Training CSV** from the tray menu. |
+| Connection error about umapyoi.net | Safe to ignore on Global. English translations from umapyoi.net are optional — everything still works, some text may show in Japanese. |
 
 ---
 
