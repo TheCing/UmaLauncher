@@ -972,6 +972,46 @@
   </div>
 </div>
 
+<!-- Race Summary (cross-race aggregated stats per uma) -->
+<div id="raceSummarySection" style="display:none;">
+  <div class="header">
+    <h1>Race Summary</h1>
+    <div class="meta" id="raceSummaryMeta"></div>
+  </div>
+  <div class="race-selector-bar">
+    <input type="text" id="summarySearch" placeholder="Search chara, trainer...">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
+      <input type="checkbox" id="summaryPlayerOnly"> My umas only
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);">
+      Min races <input type="number" id="summaryMinRaces" min="1" value="1" style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:var(--text);">
+    </label>
+    <button class="add-more-btn" id="addMoreBtnSummary">+ Add More</button>
+  </div>
+  <div style="padding: 24px;">
+    <div class="race-table-wrap" style="max-height:80vh;overflow-y:auto;">
+      <table class="race-table" id="summaryTable">
+        <thead>
+          <tr>
+            <th data-sort="chara_name">Character</th>
+            <th data-sort="trainer_name">Trainer</th>
+            <th data-sort="running_style_label">Style</th>
+            <th data-sort="stat_total" style="text-align:right;">SPD/STA/POW/GUT/WIT</th>
+            <th data-sort="rank_score" style="text-align:right;">Score</th>
+            <th data-sort="races" style="text-align:right;">Races</th>
+            <th data-sort="wins" style="text-align:right;">Wins</th>
+            <th data-sort="win_pct" style="text-align:right;">Win %</th>
+            <th data-sort="top3_pct" style="text-align:right;">Top 3 %</th>
+            <th data-sort="avg_finish" style="text-align:right;">Avg Finish</th>
+            <th data-sort="last_seen">Last Seen</th>
+          </tr>
+        </thead>
+        <tbody id="summaryTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script>
 window.onerror = function(msg, src, line, col, err) {
   const el = document.getElementById('dropZoneHint');
@@ -1106,11 +1146,13 @@ function loadFiles(fileList) {
           // Training log packets
           const run = parseGzPackets('[' + text + ']', file.name);
           if (run) { allRuns.push(run); newTrainingRuns++; }
+        } else if (data.umas && typeof data.schema_version === 'number') {
+          loadRaceSummary(data);
         } else if (data.support_cards || data.character_cards || data.characters) {
           loadAccountData(data);
         } else {
           document.getElementById('dropZoneHint').textContent =
-            file.name + ': JSON format not recognized. Use training logs, account export, or CSV.';
+            file.name + ': JSON format not recognized. Use training logs, account export, race summary, or CSV.';
         }
       } catch (err) {
         console.error('Failed to parse JSON:', err);
@@ -1979,6 +2021,115 @@ function loadAccountData(data) {
   document.getElementById('accountSection').style.display = 'block';
   renderAccount();
 }
+
+// --- Race Summary (cross-race per-uma aggregates from race_summary.json) ---
+
+const STYLE_LABELS_SHORT = { 1: 'Nige', 2: 'Senko', 3: 'Sashi', 4: 'Oikomi' };
+let raceSummaryData = null;
+let summarySort = { key: 'races', dir: 'desc' };
+
+function loadRaceSummary(data) {
+  raceSummaryData = data;
+  document.getElementById('uploadSection').style.display = 'none';
+  document.getElementById('raceSummarySection').style.display = 'block';
+  const totalUmas = Object.keys(data.umas || {}).length;
+  const generated = data.generated_at ? ' · generated ' + data.generated_at : '';
+  document.getElementById('raceSummaryMeta').textContent =
+    totalUmas + ' umas tracked' + generated;
+  renderRaceSummary();
+}
+
+function buildSummaryRows() {
+  if (!raceSummaryData) return [];
+  return Object.entries(raceSummaryData.umas || {}).map(([key, u]) => {
+    const races = u.races || 0;
+    const stats = u.stats || {};
+    return {
+      key,
+      chara_name: u.chara_name || '',
+      trainer_name: u.trainer_name || '',
+      running_style_label: u.running_style_label || '',
+      stats,
+      stat_total: (stats.speed || 0) + (stats.stamina || 0) + (stats.power || 0) + (stats.guts || 0) + (stats.wisdom || 0),
+      rank_score: u.rank_score || 0,
+      races,
+      wins: u.wins || 0,
+      top3: u.top3 || 0,
+      win_pct: races ? (100 * (u.wins || 0) / races) : 0,
+      top3_pct: races ? (100 * (u.top3 || 0) / races) : 0,
+      avg_finish: races ? ((u.total_finish_pos || 0) / races) : 0,
+      last_seen: u.last_seen || '',
+      is_player: !!u.is_player,
+    };
+  });
+}
+
+function renderRaceSummary() {
+  const rows = buildSummaryRows();
+  const search = (document.getElementById('summarySearch').value || '').toLowerCase();
+  const playerOnly = document.getElementById('summaryPlayerOnly').checked;
+  const minRaces = parseInt(document.getElementById('summaryMinRaces').value, 10) || 1;
+
+  let filtered = rows.filter(r => {
+    if (playerOnly && !r.is_player) return false;
+    if (r.races < minRaces) return false;
+    if (search) {
+      const blob = (r.chara_name + ' ' + r.trainer_name).toLowerCase();
+      if (!blob.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const { key, dir } = summarySort;
+  const mult = dir === 'asc' ? 1 : -1;
+  filtered.sort((a, b) => {
+    const av = a[key]; const bv = b[key];
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * mult;
+    return String(av).localeCompare(String(bv)) * mult;
+  });
+
+  const tbody = document.getElementById('summaryTableBody');
+  tbody.innerHTML = filtered.map(r => {
+    const marker = r.is_player ? '<span style="color:var(--accent);font-weight:600;">★</span> ' : '';
+    const s = r.stats;
+    const statStr = `${s.speed||0}/${s.stamina||0}/${s.power||0}/${s.guts||0}/${s.wisdom||0}`;
+    const lastSeen = r.last_seen ? r.last_seen.slice(0, 10) : '';
+    return `<tr>
+      <td>${marker}${escapeHtml(r.chara_name)}</td>
+      <td>${escapeHtml(r.trainer_name)}</td>
+      <td>${r.running_style_label}</td>
+      <td style="text-align:right;font-family:monospace;">${statStr}</td>
+      <td style="text-align:right;">${r.rank_score || ''}</td>
+      <td style="text-align:right;">${r.races}</td>
+      <td style="text-align:right;">${r.wins}</td>
+      <td style="text-align:right;">${r.win_pct.toFixed(1)}%</td>
+      <td style="text-align:right;">${r.top3_pct.toFixed(1)}%</td>
+      <td style="text-align:right;">${r.avg_finish.toFixed(2)}</td>
+      <td style="color:var(--text-dim);">${lastSeen}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.querySelectorAll('#summaryTable th[data-sort]').forEach(th => {
+  th.style.cursor = 'pointer';
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (summarySort.key === key) {
+      summarySort.dir = summarySort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      summarySort.key = key;
+      summarySort.dir = ['chara_name', 'trainer_name', 'running_style_label', 'last_seen'].includes(key) ? 'asc' : 'desc';
+    }
+    renderRaceSummary();
+  });
+});
+
+document.getElementById('summarySearch').addEventListener('input', renderRaceSummary);
+document.getElementById('summaryPlayerOnly').addEventListener('change', renderRaceSummary);
+document.getElementById('summaryMinRaces').addEventListener('input', renderRaceSummary);
+document.getElementById('addMoreBtnSummary').addEventListener('click', () => {
+  document.getElementById('addMoreInput').click();
+});
 
 // Account tabs
 document.querySelectorAll('.account-tab').forEach(tab => {

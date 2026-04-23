@@ -5,12 +5,15 @@ import json
 import time
 import gzip
 import math
+from datetime import datetime
 
 from loguru import logger
 import util
 import mdb
 
 RACE_LOG_DIR_NAME = "race_logs"
+RACE_SUMMARY_FILENAME = "race_summary.json"
+RACE_SUMMARY_SCHEMA_VERSION = 1
 
 RUNNING_STYLES = {
     1: "Nige",
@@ -71,6 +74,140 @@ RACE_TYPE_FOLDERS = {
     "Single": "Career",
     "Practice": "Practice room",
 }
+
+
+def _uma_key(viewer_id, trained_chara_id, card_id, stats_tuple, running_style):
+    """Stable identity for a specific uma build across races.
+
+    Primary key: viewer_id + trained_chara_id (each completed career gets a
+    new trained_chara_id, so different builds of the same chara don't collide).
+    Fallback (NPCs, missing ids): viewer_id + card_id + stats + style hash.
+    """
+    if viewer_id and trained_chara_id:
+        return f"{viewer_id}_{trained_chara_id}"
+    stat_sig = "_".join(str(s) for s in stats_tuple)
+    return f"{viewer_id}_c{card_id}_st{running_style}_{stat_sig}"
+
+
+def _load_race_summary():
+    path = os.path.join(util.get_appdata(RACE_LOG_DIR_NAME), RACE_SUMMARY_FILENAME)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                data.setdefault('umas', {})
+                data.setdefault('schema_version', RACE_SUMMARY_SCHEMA_VERSION)
+                return path, data
+        except Exception as e:
+            logger.warning(f"race_summary.json unreadable, starting fresh: {e}")
+    return path, {"schema_version": RACE_SUMMARY_SCHEMA_VERSION, "umas": {}}
+
+
+def _save_race_summary(path, summary):
+    summary['generated_at'] = datetime.now().isoformat(timespec='seconds')
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def _apply_race_to_summary(summary, race_id, race_type, race_instance_id,
+                           horses, finish_data, activated_skills_by_post,
+                           owner_viewer_id, chara_names):
+    """Fold one race's results into the summary's per-uma aggregates.
+
+    `race_id` is a stable identifier for this race (e.g., the saved filename,
+    or relative path). Re-applying the same race_id is a no-op so rebuilds
+    and live updates can't double-count.
+    """
+    now_str = datetime.now().isoformat(timespec='seconds')
+    umas = summary['umas']
+    updated_any = False
+
+    for i, h in enumerate(horses):
+        frame_order = h.get('frame_order', i + 1)
+        hr = finish_data.get(frame_order - 1)
+        if not hr:
+            continue
+
+        viewer_id = h.get('viewer_id', 0) or h.get('owner_viewer_id', 0)
+        trained_chara_id = h.get('trained_chara_id', 0)
+        card_id = h.get('card_id', 0)
+        chara_id = h.get('chara_id', 0)
+        stats_tuple = (
+            h.get('speed', 0), h.get('stamina', 0), h.get('pow', 0),
+            h.get('guts', 0), h.get('wiz', 0),
+        )
+        running_style = h.get('running_style', 0)
+
+        key = _uma_key(viewer_id, trained_chara_id, card_id, stats_tuple, running_style)
+
+        uma = umas.get(key)
+        if uma is None:
+            uma = {
+                'viewer_id': viewer_id,
+                'trained_chara_id': trained_chara_id,
+                'card_id': card_id,
+                'chara_id': chara_id,
+                'chara_name': chara_names.get(chara_id, f'Chara {chara_id}'),
+                'trainer_name': h.get('trainer_name', '') or h.get('owner_trainer_name', ''),
+                'is_player': bool(owner_viewer_id) and viewer_id == owner_viewer_id,
+                'stats': {
+                    'speed': stats_tuple[0], 'stamina': stats_tuple[1],
+                    'power': stats_tuple[2], 'guts': stats_tuple[3], 'wisdom': stats_tuple[4],
+                },
+                'running_style': running_style,
+                'running_style_label': RUNNING_STYLES.get(running_style, ''),
+                'rank_score': h.get('rank_score', 0),
+                'races': 0,
+                'wins': 0,
+                'top3': 0,
+                'total_finish_pos': 0,
+                'by_race_type': {},
+                'by_race_instance': {},
+                'skill_activations': {},
+                'race_ids': [],
+                'first_seen': now_str,
+                'last_seen': now_str,
+            }
+            umas[key] = uma
+
+        if race_id in uma['race_ids']:
+            continue  # already counted this race for this uma
+
+        finish_order = hr.finish_order  # 0-indexed: 0 = winner
+        uma['races'] += 1
+        uma['total_finish_pos'] += finish_order + 1
+        if finish_order == 0:
+            uma['wins'] += 1
+        if finish_order < 3:
+            uma['top3'] += 1
+
+        rt = race_type or 'Unknown'
+        rt_bucket = uma['by_race_type'].setdefault(rt, {'races': 0, 'wins': 0})
+        rt_bucket['races'] += 1
+        if finish_order == 0:
+            rt_bucket['wins'] += 1
+
+        if race_instance_id:
+            ri_bucket = uma['by_race_instance'].setdefault(str(race_instance_id), {'races': 0, 'wins': 0})
+            ri_bucket['races'] += 1
+            if finish_order == 0:
+                ri_bucket['wins'] += 1
+
+        for s in activated_skills_by_post.get(frame_order - 1, []):
+            sid = str(s['skillId'])
+            uma['skill_activations'][sid] = uma['skill_activations'].get(sid, 0) + 1
+
+        uma['race_ids'].append(race_id)
+        uma['last_seen'] = now_str
+        # Update mutable profile fields from most recent race (stats can drift
+        # if user re-evaluates unique skill etc.; trainer renames themselves)
+        uma['trainer_name'] = h.get('trainer_name', '') or h.get('owner_trainer_name', '') or uma['trainer_name']
+        uma['rank_score'] = h.get('rank_score', 0) or uma['rank_score']
+        updated_any = True
+
+    return updated_any
 
 
 def _apt(val):
@@ -691,6 +828,30 @@ def save_race_packet(data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
     logger.info(f"Saved HorseACT-compatible race data to {filepath}")
+
+    # Fold this race into the cross-race summary (isolated so a failure here
+    # doesn't prevent the main log from being saved).
+    try:
+        owner_viewer_id = next(
+            (tc.get('owner_viewer_id') or tc.get('viewer_id') for tc in trained_charas
+             if tc.get('owner_viewer_id') or tc.get('viewer_id')),
+            0,
+        ) or 0
+        race_id = os.path.relpath(
+            filepath,
+            util.get_appdata(RACE_LOG_DIR_NAME),
+        ).replace('\\', '/')
+        summary_path, summary = _load_race_summary()
+        changed = _apply_race_to_summary(
+            summary, race_id, race_type, race_result.get('race_instance_id', 0),
+            horses, finish_data, activated_skills_by_post,
+            owner_viewer_id, chara_names,
+        )
+        if changed:
+            _save_race_summary(summary_path, summary)
+    except Exception:
+        logger.exception("Failed to update race_summary.json")
+
     return filepath
 
 
