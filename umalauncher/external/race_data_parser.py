@@ -16,8 +16,14 @@ def deserialize_header(b: bytearray) -> (race_data_pb2.RaceSimulateHeaderData, i
 
 def deserialize_horse_frame(b: bytearray, offset: int) -> race_data_pb2.RaceSimulateHorseFrameData:
     horse_frame = race_data_pb2.RaceSimulateHorseFrameData()
-    (horse_frame.distance, horse_frame.lane_position, horse_frame.speed, horse_frame.hp, horse_frame.temptation_mode,
-     horse_frame.block_front_horse_index) = struct.unpack_from('<fHHHbb', b, offset=offset)
+    (distance, lane_position, speed, hp, temptation_mode,
+     block_front_horse_index) = struct.unpack_from('<fHHHbb', b, offset=offset)
+    horse_frame.distance = distance
+    horse_frame.lane_position = lane_position
+    horse_frame.speed = speed
+    horse_frame.hp = hp
+    _set_enum_safe(horse_frame, 'temptation_mode', temptation_mode)
+    horse_frame.block_front_horse_index = block_front_horse_index
     return horse_frame
 
 
@@ -32,19 +38,40 @@ def deserialize_frame(b: bytearray, offset: int, horse_num: int,
     return frame
 
 
+def _set_enum_safe(msg, field, value):
+    """Assign an enum field tolerant of unknown values from newer game versions."""
+    try:
+        setattr(msg, field, value)
+    except ValueError:
+        pass  # unknown enum value — leave unset
+
+
 def deserialize_horse_result(b: bytearray, offset: int) -> race_data_pb2.RaceSimulateHorseResultData:
     horse_result = race_data_pb2.RaceSimulateHorseResultData()
-    (horse_result.finish_order, horse_result.finish_time, horse_result.finish_diff_time, horse_result.start_delay_time,
-     horse_result.guts_order, horse_result.wiz_order, horse_result.last_spurt_start_distance,
-     horse_result.running_style, horse_result.defeat,
-     horse_result.finish_time_raw) = struct.unpack_from('<ifffBBfBif', b, offset)
+    (finish_order, finish_time, finish_diff_time, start_delay_time,
+     guts_order, wiz_order, last_spurt_start_distance,
+     running_style, defeat,
+     finish_time_raw) = struct.unpack_from('<ifffBBfBif', b, offset)
+    horse_result.finish_order = finish_order
+    horse_result.finish_time = finish_time
+    horse_result.finish_diff_time = finish_diff_time
+    horse_result.start_delay_time = start_delay_time
+    horse_result.guts_order = guts_order
+    horse_result.wiz_order = wiz_order
+    horse_result.last_spurt_start_distance = last_spurt_start_distance
+    _set_enum_safe(horse_result, 'running_style', running_style)
+    horse_result.defeat = defeat
+    horse_result.finish_time_raw = finish_time_raw
     return horse_result
 
 
 def deserialize_event(b: bytearray, offset: int) -> race_data_pb2.RaceSimulateEventData:
     event = race_data_pb2.RaceSimulateEventData()
     fmt = '<fbb'
-    (event.frame_time, event.type, event.param_count) = struct.unpack_from(fmt, b, offset)
+    (frame_time, event_type, param_count) = struct.unpack_from(fmt, b, offset)
+    event.frame_time = frame_time
+    _set_enum_safe(event, 'type', event_type)
+    event.param_count = param_count
     offset += struct.calcsize(fmt)
     for i in range(event.param_count):
         event.param.append(struct.unpack_from('<i', b, offset)[0])
