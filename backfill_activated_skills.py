@@ -20,8 +20,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'umalauncher'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'umalauncher', 'external'))
 
 import race_data_parser
+import util
 
-LOG_DIR = os.path.join(os.path.dirname(__file__), 'umalauncher', 'appdata', 'race_logs')
+REGION = util.get_region_label()
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'umalauncher', 'appdata', REGION, 'race_logs')
 
 
 def backfill_one(data):

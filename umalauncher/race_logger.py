@@ -217,10 +217,12 @@ def _apt(val):
 def get_log_dir(race_type=None):
     """Return the race logs directory, optionally under a race-type subfolder.
 
-    `race_type` is the HorseACT-style label (RoomMatch/Champions/Single/Practice).
-    Unknown or missing types fall through to the top-level race_logs folder.
+    Layout: appdata/{GL|JP}/race_logs/{Room match|Champions meeting|...}/
+
+    The region layer keeps JP and GL data separate since they have different
+    MDBs (skill IDs / chara IDs can diverge between regions).
     """
-    base = util.get_appdata(RACE_LOG_DIR_NAME)
+    base = util.get_appdata_region(RACE_LOG_DIR_NAME)
     subfolder = RACE_TYPE_FOLDERS.get(race_type) if race_type else None
     d = os.path.join(base, subfolder) if subfolder else base
     if not os.path.exists(d):

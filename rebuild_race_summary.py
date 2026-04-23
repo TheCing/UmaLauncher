@@ -21,7 +21,8 @@ import race_data_parser
 import race_logger
 import util
 
-LOG_DIR = os.path.join(os.path.dirname(__file__), 'umalauncher', 'appdata', 'race_logs')
+REGION = util.get_region_label()
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'umalauncher', 'appdata', REGION, 'race_logs')
 
 
 class FakeFinish:

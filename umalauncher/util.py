@@ -39,10 +39,25 @@ if is_script:
 
 os.makedirs(appdata_dir, exist_ok=True)
 
+def get_region_label():
+    """Returns 'GL' for the Global Steam build, 'JP' for JP DMM/Steam.
+
+    Used to segregate race/training logs so region-specific MDB data doesn't
+    cross-contaminate stats (skill IDs and chara IDs can diverge between
+    regions even when they look the same).
+    """
+    return 'GL' if 'IS_UL_GLOBAL' in os.environ else 'JP'
+
+
 def get_appdata(relative_path):
     """Gets the absolute path of a file relative to the appdata directory.
     """
     return os.path.join(appdata_dir, relative_path)
+
+
+def get_appdata_region(relative_path):
+    """Like get_appdata but nested under a GL/JP region subfolder."""
+    return os.path.join(appdata_dir, get_region_label(), relative_path)
 
 def get_relative(relative_path):
     """Gets the absolute path of a file relative to the executable's directory.
@@ -122,7 +137,7 @@ import numpy as np
 import mdb
 import gui
 
-TRAINING_LOGS_FOLDER = get_appdata("training_logs")
+TRAINING_LOGS_FOLDER = get_appdata_region("training_logs")
 
 last_failed_request = None
 has_failed_once = False
