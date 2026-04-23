@@ -90,7 +90,8 @@ def _uma_key(viewer_id, trained_chara_id, card_id, stats_tuple, running_style):
 
 
 def _load_race_summary():
-    path = os.path.join(util.get_appdata(RACE_LOG_DIR_NAME), RACE_SUMMARY_FILENAME)
+    path = os.path.join(util.get_appdata_region(RACE_LOG_DIR_NAME), RACE_SUMMARY_FILENAME)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     if os.path.exists(path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
