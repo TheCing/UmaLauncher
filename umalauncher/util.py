@@ -103,7 +103,8 @@ def elevate():
 def log_reset():
     logger.remove()
     if is_script:
-        logger.add(sys.stderr, level="TRACE")
+        # Stderr sink mirrors the file sink level (set via env var UL_LOG_LEVEL).
+        logger.add(sys.stderr, level=os.environ.get("UL_LOG_LEVEL", "INFO"))
     return
 
 def log_set_info():
@@ -116,9 +117,12 @@ def log_set_trace():
     logger.add(get_appdata("log.log"), rotation="1 week", compression="zip", retention="1 month", encoding='utf-8', level="TRACE")
     return
 
-if is_script:
+# Default both script and exe mode to INFO. Set UL_LOG_LEVEL=TRACE / DEBUG in
+# the env (or run `set UL_LOG_LEVEL=DEBUG` before the launcher) to crank it
+# back up for troubleshooting.
+if os.environ.get("UL_LOG_LEVEL", "").upper() == "TRACE":
     log_set_trace()
-    logger.debug("Running from script, enabling debug logging.")
+    logger.debug("UL_LOG_LEVEL=TRACE, enabling full trace logging.")
 else:
     log_set_info()
 
