@@ -84,11 +84,23 @@ def deserialize(b: bytearray) -> race_data_pb2.RaceSimulateData:
 
     header, offset = deserialize_header(b)
     data.header.CopyFrom(header)
+    version = header.version
 
-    fmt = '<fiii'
-    data.distance_diff_max, data.horse_num, data.horse_frame_size, data.horse_result_size = \
-        struct.unpack_from(fmt, b, offset)
-    offset += struct.calcsize(fmt)
+    # Version 100000004+ removed the single horse_result_size field and
+    # replaced it with a per-horse array before the results. Each horse's
+    # block is 31 bytes (standard result) + 8 bytes (unknown+skill_count)
+    # + 5*N bytes (N skill activations: skill_id int32 + activated byte).
+    v4_plus = version >= 100000004
+
+    if v4_plus:
+        data.distance_diff_max, data.horse_num, data.horse_frame_size = \
+            struct.unpack_from('<fii', b, offset)
+        data.horse_result_size = 0  # variable per-horse in v4+
+        offset += 12
+    else:
+        data.distance_diff_max, data.horse_num, data.horse_frame_size, data.horse_result_size = \
+            struct.unpack_from('<fiii', b, offset)
+        offset += 16
 
     data.__padding_size_1 = struct.unpack_from('<i', b, offset)[0]
     offset += 4 + data.__padding_size_1
@@ -104,9 +116,18 @@ def deserialize(b: bytearray) -> race_data_pb2.RaceSimulateData:
     data.__padding_size_2 = struct.unpack_from('<i', b, offset)[0]
     offset += 4 + data.__padding_size_2
 
+    # v4+: read per-horse result sizes, then each horse_result uses its own size
+    if v4_plus:
+        horse_result_sizes = list(
+            struct.unpack_from(f'<{data.horse_num}i', b, offset)
+        )
+        offset += data.horse_num * 4
+    else:
+        horse_result_sizes = [data.horse_result_size] * data.horse_num
+
     for i in range(data.horse_num):
         data.horse_result.append(deserialize_horse_result(b, offset))
-        offset += data.horse_result_size
+        offset += horse_result_sizes[i]
 
     data.__padding_size_3 = struct.unpack_from('<i', b, offset)[0]
     offset += 4 + data.__padding_size_3
