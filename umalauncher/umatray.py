@@ -120,11 +120,19 @@ class UmaTray():
         the temp dir is wiped when the app exits, which would break the browser
         tab on refresh.
         """
-        src = util.get_asset("training_viewer.html")
-        if not os.path.exists(src):
+        # Built exe: get_asset points into the PyInstaller _MEIPASS bundle.
+        # Script mode: cwd is umalauncher/ so get_asset misses; the file lives
+        # at the repo root (one level up). Check both.
+        candidates = [
+            util.get_asset("training_viewer.html"),
+            os.path.join(os.path.dirname(util.relative_dir), "training_viewer.html"),
+        ]
+        src = next((p for p in candidates if os.path.exists(p)), None)
+        if src is None:
             util.show_info_box(
                 "Training Viewer",
-                "training_viewer.html is not bundled with this build.<br>Download it from the GitHub release and open it directly."
+                "Could not locate training_viewer.html.<br>"
+                "Expected at one of:<br>" + "<br>".join(candidates)
             )
             return
         dst = util.get_appdata("training_viewer.html")
