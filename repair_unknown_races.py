@@ -45,6 +45,17 @@ def repair_race(data):
     if not horses or len(sim.horse_result) != len(horses):
         return None
 
+    # Collect activated skills per post position from SKILL events (type=3).
+    activated_by_post = {}
+    for wrapper in sim.event:
+        ev = wrapper.event
+        if ev.type != 3 or len(ev.param) < 2:
+            continue
+        activated_by_post.setdefault(ev.param[0], []).append({
+            "skillId": ev.param[1],
+            "frameTime": ev.frame_time,
+        })
+
     # sim.horse_result is indexed by post position (frame_order - 1).
     # Each horse entry has a `postNumber` (= frame_order).
     for h in horses:
@@ -58,6 +69,9 @@ def repair_race(data):
         h['FinishTimeScaled'] = hr.finish_time
         h['FinishDiffTimeFromPrev'] = hr.finish_diff_time
         h['<Defeat>k__BackingField'] = DEFEAT_LABELS.get(hr.defeat, "None")
+        skills = activated_by_post.get(idx)
+        if skills:
+            h['ActivatedSkills'] = skills
 
     # Winner = horse with FinishOrder == 0 (game uses 0-indexed finish order).
     winner = next((h for h in horses if h.get('FinishOrder') == 0), None)

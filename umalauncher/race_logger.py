@@ -376,8 +376,14 @@ def _build_race_param(horse_data):
     }
 
 
-def _build_horse_entry(index, horse_data, horse_result, chara_name, trained_chara, race_record):
-    """Build a HorseACT-compatible horse object."""
+def _build_horse_entry(index, horse_data, horse_result, chara_name, trained_chara, race_record, activated_skills=None):
+    """Build a HorseACT-compatible horse object.
+
+    activated_skills: list of {skillId, frameTime} dicts — skills this horse
+    fired during the race, extracted from sim events. Added as the custom
+    "ActivatedSkills" field, which Hakuraku's viewer ignores (it re-parses
+    SimDataBase64 for its own skill timeline), so this is purely additive.
+    """
     popularity = horse_data.get('popularity', 0)
     pop_marks = horse_data.get('popularity_mark_rank_array', [0, 0, 0])
 
@@ -417,6 +423,9 @@ def _build_horse_entry(index, horse_data, horse_result, chara_name, trained_char
     if transformed_tc:
         entry["<TrainedCharaData>k__BackingField"] = transformed_tc
 
+    if activated_skills:
+        entry["ActivatedSkills"] = activated_skills
+
     return entry
 
 
@@ -451,11 +460,25 @@ def save_race_packet(data):
     # same `horse_result[frame_order-1]` pattern.
     scenario_str = data.get('race_scenario', '')
     finish_data = {}
+    # Map frame_order -> list of {skill_id, frame_time} activations.
+    # Extracted from sim.event entries where event.type == SKILL (3):
+    # param[0] = the activating horse's frame order, param[1] = skill_id.
+    # (Matches Hakuraku's filterCharaSkills in data/RaceDataUtils.ts.)
+    activated_skills_by_post = {}
     if scenario_str and isinstance(scenario_str, str):
         try:
             sim = parse_race_scenario(scenario_str)
             for i, hr in enumerate(sim.horse_result):
                 finish_data[i] = hr
+            for wrapper in sim.event:
+                ev = wrapper.event
+                if ev.type != 3 or len(ev.param) < 2:  # 3 = SKILL
+                    continue
+                post_idx = ev.param[0]  # 0-indexed frame order
+                activated_skills_by_post.setdefault(post_idx, []).append({
+                    "skillId": ev.param[1],
+                    "frameTime": ev.frame_time,
+                })
         except Exception as e:
             logger.warning(f"Could not parse race_scenario: {e}")
 
@@ -485,7 +508,8 @@ def save_race_packet(data):
         tc = tc_lookup.get((viewer_id, card_id))
 
         race_record = _build_race_record(h, program_to_instance)
-        entry = _build_horse_entry(i, h, hr, chara_name, tc, race_record)
+        activated_skills = activated_skills_by_post.get(frame_order - 1, [])
+        entry = _build_horse_entry(i, h, hr, chara_name, tc, race_record, activated_skills)
         all_horses.append(entry)
 
     # Determine player teams (group by team_id)
