@@ -50,20 +50,42 @@ def _distance_type(distance):
 
 
 def _guess_race_type(race_result):
-    rid = race_result.get('race_instance_id', 0)
-    if race_result.get('room_id'):
+    """Detect race type from race_result packet signals.
+
+    Room Match: has room_id / saved_room_id / host_viewer_id / room_name
+    Champions: no room signals, but has a race_instance_id set
+    Unknown: no useful signals to distinguish
+    """
+    if race_result.get('room_id') or race_result.get('saved_room_id') \
+            or race_result.get('host_viewer_id') or race_result.get('room_name'):
         return "RoomMatch"
-    if 900000 <= rid < 1000000:
+    if race_result.get('race_instance_id'):
         return "Champions"
     return "Unknown"
+
+
+# Maps HorseACT-style RaceType values to subfolder names (same as HorseACT plugin).
+RACE_TYPE_FOLDERS = {
+    "RoomMatch": "Room match",
+    "Champions": "Champions meeting",
+    "Single": "Career",
+    "Practice": "Practice room",
+}
 
 
 def _apt(val):
     return APTITUDE_LABELS.get(val, str(val))
 
 
-def get_log_dir():
-    d = util.get_appdata(RACE_LOG_DIR_NAME)
+def get_log_dir(race_type=None):
+    """Return the race logs directory, optionally under a race-type subfolder.
+
+    `race_type` is the HorseACT-style label (RoomMatch/Champions/Single/Practice).
+    Unknown or missing types fall through to the top-level race_logs folder.
+    """
+    base = util.get_appdata(RACE_LOG_DIR_NAME)
+    subfolder = RACE_TYPE_FOLDERS.get(race_type) if race_type else None
+    d = os.path.join(base, subfolder) if subfolder else base
     if not os.path.exists(d):
         os.makedirs(d)
     return d
@@ -412,9 +434,10 @@ def _build_phase_calculator(distance):
 
 def save_race_packet(data):
     """Save race data as a HorseACT-compatible JSON file."""
-    log_dir = get_log_dir()
-
     race_result = data.get('race_result', {})
+    race_type = _guess_race_type(race_result)
+    log_dir = get_log_dir(race_type)
+
     horses = data.get('race_horse_data_array', [])
     trained_charas = data.get('trained_chara_array', [])
 
@@ -540,7 +563,7 @@ def save_race_packet(data):
 
     # Build the HorseACT-compatible output
     output = {
-        "<RaceType>k__BackingField": _guess_race_type(race_result),
+        "<RaceType>k__BackingField": race_type,
         "<IsExistPlayerRace>k__BackingField": True,
         "<IsExistGhostRace>k__BackingField": False,
         "<IsExistFollowRace>k__BackingField": False,
