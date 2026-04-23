@@ -52,23 +52,18 @@ def _distance_type(distance):
     return "Long"
 
 
-def _guess_race_type(race_result, horses=None):
-    """Detect race type from race_result packet + horse-array shape.
+def _guess_race_type(race_result):
+    """Detect race type from race_result packet signals.
 
-    Room Match: has room_id / saved_room_id / host_viewer_id / room_name,
-                or 9 horses split into 3 teams of 3 distinct viewer_ids.
+    Room Match: has room_id / saved_room_id / host_viewer_id / room_name.
     Champions: no room signals, but has a race_instance_id set.
-    Unknown: no useful signals to distinguish.
+    Unknown: no useful signals to distinguish (both Room Match and
+             Champions are 9 horses / 3 teams of 3 with distinct
+             viewer_ids, so the array shape can't distinguish them).
     """
     if race_result.get('room_id') or race_result.get('saved_room_id') \
             or race_result.get('host_viewer_id') or race_result.get('room_name'):
         return "RoomMatch"
-    # Room Match shape fallback: the game doesn't always populate race_result.
-    if horses and len(horses) == 9:
-        team_ids = {h.get('team_id', 0) for h in horses}
-        viewer_ids = {h.get('viewer_id', 0) for h in horses if h.get('viewer_id')}
-        if len(team_ids) == 3 and len(viewer_ids) == 3:
-            return "RoomMatch"
     if race_result.get('race_instance_id'):
         return "Champions"
     return "Unknown"
@@ -598,7 +593,7 @@ def save_race_packet(data):
         logger.warning("No horses in race packet, skipping save.")
         return None
 
-    race_type = _guess_race_type(race_result, horses)
+    race_type = _guess_race_type(race_result)
     log_dir = get_log_dir(race_type)
 
     # Parse finish order from race_scenario.
