@@ -300,7 +300,7 @@ class CarrotJuicer:
             # never in training (where it's nested inside race_start_info).
             if 'race_horse_data_array' in data and 'race_scenario' in data:
                 logger.info("Standalone race detected, logging results.")
-                race_logger.save_race_packet(data)
+                race_logger.save_race_packet(data, previous_request=self.previous_request)
                 race_logger.log_race(data)
                 return
 

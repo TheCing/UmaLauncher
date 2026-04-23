@@ -52,15 +52,25 @@ def _distance_type(distance):
     return "Long"
 
 
-def _guess_race_type(race_result):
-    """Detect race type from race_result packet signals.
+def _guess_race_type(race_result, request_keys=None):
+    """Detect race type from the race_result payload AND the preceding
+    request's top-level key names.
 
-    Room Match: has room_id / saved_room_id / host_viewer_id / room_name.
-    Champions: no room signals, but has a race_instance_id set.
-    Unknown: no useful signals to distinguish (both Room Match and
-             Champions are 9 horses / 3 teams of 3 with distinct
-             viewer_ids, so the array shape can't distinguish them).
+    The preceding request is usually the most authoritative signal because
+    different APIs are called for each race type (e.g. Room Match vs
+    Champions Meet race-result endpoints have distinct request schemas).
     """
+    # Preceding-request signals (authoritative when present).
+    if request_keys:
+        joined = ' '.join(request_keys).lower()
+        if 'room_match' in joined or 'room_id' in request_keys:
+            return "RoomMatch"
+        if 'champions' in joined or 'champion_meet' in joined or 'tournament' in joined:
+            return "Champions"
+        if 'single_mode' in joined:
+            return "Single"
+
+    # race_result payload signals (less reliable — sometimes empty).
     if race_result.get('room_id') or race_result.get('saved_room_id') \
             or race_result.get('host_viewer_id') or race_result.get('room_name'):
         return "RoomMatch"
@@ -583,8 +593,13 @@ def _build_phase_calculator(distance):
     }
 
 
-def save_race_packet(data):
-    """Save race data as a HorseACT-compatible JSON file."""
+def save_race_packet(data, previous_request=None):
+    """Save race data as a HorseACT-compatible JSON file.
+
+    `previous_request` is the request packet that preceded this response
+    (stored by carrotjuicer as `self.previous_request`). Its top-level keys
+    reveal which API was called (Room Match vs Champions Meet vs ...).
+    """
     race_result = data.get('race_result', {})
     horses = data.get('race_horse_data_array', [])
     trained_charas = data.get('trained_chara_array', [])
@@ -593,7 +608,9 @@ def save_race_packet(data):
         logger.warning("No horses in race packet, skipping save.")
         return None
 
-    race_type = _guess_race_type(race_result)
+    req_keys = sorted((previous_request or {}).keys()) if isinstance(previous_request, dict) else []
+    race_type = _guess_race_type(race_result, req_keys)
+    logger.info(f"Race type: {race_type}; preceding request keys: {req_keys}")
     log_dir = get_log_dir(race_type)
 
     # Parse finish order from race_scenario.
@@ -822,6 +839,9 @@ def save_race_packet(data):
         "<HorseIndexByPopularity>k__BackingField": horse_index_by_pop,
         "umalauncher_version": util.VERSION if hasattr(util, 'VERSION') else "unknown",
         "_raceResult": race_result,
+        # Diagnostic: preceding request's top-level keys. Used to classify
+        # RaceType when race_result is empty, and to tune the detector.
+        "umalauncher_request_keys": req_keys,
     })
 
     # Filename: CharaName-FinishTimeRaw+s-YYYYMMDD.json
