@@ -91,6 +91,7 @@ Right-click the horseshoe in the system tray:
 | Export Training CSV | Convert training logs to spreadsheet |
 | Export Account Data | Save account info to JSON |
 | Recommend skill buys | Optimal skill purchase advice |
+| Open Training Viewer | Launch the HTML dashboard in your browser |
 | Close | Exit Uma Launcher |
 
 ---

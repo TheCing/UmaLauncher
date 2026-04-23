@@ -1,3 +1,7 @@
+import os
+import shutil
+import webbrowser
+
 import pystray
 import util
 import account
@@ -25,6 +29,7 @@ class UmaTray():
         menu_items.append(pystray.MenuItem("Export Training CSV", lambda: self.show_training_csv_dialog()))
         menu_items.append(pystray.MenuItem("Export Account Data", lambda: self.export_account()))
         menu_items.append(pystray.MenuItem("Recommend skill buys", lambda: self.recommend_skill_buys()))
+        menu_items.append(pystray.MenuItem("Open Training Viewer", lambda: self.open_training_viewer()))
         menu_items.append(pystray.Menu.SEPARATOR)
         menu_items.append(pystray.MenuItem("Close", lambda: close_clicked(self)))
         # if util.is_debug:
@@ -107,6 +112,30 @@ class UmaTray():
             util.show_error_box_no_report("Skill Recommender", f"Failed to compute recommendation:<br>{e}")
             return
         util.show_info_box("Skill Recommender", skill_recommender.format_html(result))
+
+    def open_training_viewer(self):
+        """Copy the bundled training_viewer.html into appdata and open it in the default browser.
+
+        We copy rather than open from the PyInstaller temp dir directly because
+        the temp dir is wiped when the app exits, which would break the browser
+        tab on refresh.
+        """
+        src = util.get_asset("training_viewer.html")
+        if not os.path.exists(src):
+            util.show_info_box(
+                "Training Viewer",
+                "training_viewer.html is not bundled with this build.<br>Download it from the GitHub release and open it directly."
+            )
+            return
+        dst = util.get_appdata("training_viewer.html")
+        try:
+            shutil.copy2(src, dst)
+        except Exception as e:
+            logger.exception("Failed to copy training_viewer.html")
+            util.show_error_box_no_report("Training Viewer", f"Could not prepare viewer:<br>{e}")
+            return
+        url = "file:///" + dst.replace("\\", "/")
+        webbrowser.open(url)
 
 def close_clicked(tray: UmaTray):
     tray.threader.stop()

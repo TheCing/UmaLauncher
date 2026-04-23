@@ -7,7 +7,7 @@ a = Analysis(
     ['threader.py'],
     pathex=['../.venv/Lib/site-packages'],
     binaries=[],
-    datas=[('./_assets/icon/default.ico', '.'), ('./_assets/icon/connecting.ico', '.'), ('./_assets/icon/connected.ico', '.')],
+    datas=[('./_assets/icon/default.ico', '.'), ('./_assets/icon/connecting.ico', '.'), ('./_assets/icon/connected.ico', '.'), ('../training_viewer.html', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
