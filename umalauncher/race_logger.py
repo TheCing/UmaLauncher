@@ -52,15 +52,12 @@ def _distance_type(distance):
     return "Long"
 
 
-def _guess_race_type(race_result, request_keys=None):
-    """Detect race type from the race_result payload AND the preceding
-    request's top-level key names.
-
-    The preceding request is usually the most authoritative signal because
-    different APIs are called for each race type (e.g. Room Match vs
-    Champions Meet race-result endpoints have distinct request schemas).
+def _guess_race_type(race_result, request_keys=None, response_keys=None):
+    """Detect race type using (in priority order):
+    1. Preceding request's top-level keys (different APIs per race type)
+    2. Response-level siblings (e.g. champions_info pins a Champions race)
+    3. race_result payload (sometimes empty, unreliable fallback)
     """
-    # Preceding-request signals (authoritative when present).
     if request_keys:
         joined = ' '.join(request_keys).lower()
         if 'room_match' in joined or 'room_id' in request_keys:
@@ -70,7 +67,13 @@ def _guess_race_type(race_result, request_keys=None):
         if 'single_mode' in joined:
             return "Single"
 
-    # race_result payload signals (less reliable — sometimes empty).
+    if response_keys:
+        resp_set = set(response_keys)
+        if 'champions_info' in resp_set or 'champions_mission_array' in resp_set:
+            return "Champions"
+        if 'room_match_info_array' in resp_set:
+            return "RoomMatch"
+
     if race_result.get('room_id') or race_result.get('saved_room_id') \
             or race_result.get('host_viewer_id') or race_result.get('room_name'):
         return "RoomMatch"
@@ -593,12 +596,13 @@ def _build_phase_calculator(distance):
     }
 
 
-def save_race_packet(data, previous_request=None):
+def save_race_packet(data, previous_request=None, response_top_keys=None):
     """Save race data as a HorseACT-compatible JSON file.
 
-    `previous_request` is the request packet that preceded this response
-    (stored by carrotjuicer as `self.previous_request`). Its top-level keys
-    reveal which API was called (Room Match vs Champions Meet vs ...).
+    `previous_request` is the request packet that preceded this response.
+    `response_top_keys` is the top-level key list of the WHOLE response (before
+    any unwrapping by the caller, e.g. for Champions Meet nested races).
+    Together they drive race-type classification in _guess_race_type.
     """
     race_result = data.get('race_result', {})
     horses = data.get('race_horse_data_array', [])
@@ -609,8 +613,9 @@ def save_race_packet(data, previous_request=None):
         return None
 
     req_keys = sorted((previous_request or {}).keys()) if isinstance(previous_request, dict) else []
-    race_type = _guess_race_type(race_result, req_keys)
-    logger.info(f"Race type: {race_type}; preceding request keys: {req_keys}")
+    resp_keys = sorted(response_top_keys) if response_top_keys else sorted(data.keys())
+    race_type = _guess_race_type(race_result, req_keys, resp_keys)
+    logger.info(f"Race type: {race_type}; req keys: {req_keys[:5]}{'...' if len(req_keys)>5 else ''}; resp keys: {resp_keys[:8]}{'...' if len(resp_keys)>8 else ''}")
     log_dir = get_log_dir(race_type)
 
     # Parse finish order from race_scenario.

@@ -324,13 +324,34 @@ class CarrotJuicer:
                                 logger.info(f"[race-diag]   {inner_key}: {type(v).__name__}")
 
             # Standalone race logging (Room Match, Champions Meet, etc.)
-            # race_horse_data_array at top level only appears in standalone races,
-            # never in training (where it's nested inside race_start_info).
+            # Room Match: race_horse_data_array + race_scenario at top level.
+            # Champions Meet: those fields nested inside race_result_array[N]
+            # (each entry is a full race — Champions plays 3 races per bracket).
+            response_top_keys = list(data.keys()) if isinstance(data, dict) else []
+
             if 'race_horse_data_array' in data and 'race_scenario' in data:
-                logger.info("Standalone race detected, logging results.")
-                race_logger.save_race_packet(data, previous_request=self.previous_request)
+                logger.info("Standalone race detected (top-level), logging results.")
+                race_logger.save_race_packet(data, previous_request=self.previous_request, response_top_keys=response_top_keys)
                 race_logger.log_race(data)
                 return
+
+            rra = data.get('race_result_array')
+            if isinstance(rra, list) and rra:
+                logged_any = False
+                for i, entry in enumerate(rra):
+                    if not isinstance(entry, dict):
+                        continue
+                    if 'race_horse_data_array' not in entry or 'race_scenario' not in entry:
+                        continue
+                    logger.info(f"Nested race detected (race_result_array[{i}]), logging results.")
+                    # Merge top-level context into the nested entry so
+                    # champions_info / trained_chara_array stay available.
+                    merged = {**data, **entry}
+                    race_logger.save_race_packet(merged, previous_request=self.previous_request, response_top_keys=response_top_keys)
+                    race_logger.log_race(merged)
+                    logged_any = True
+                if logged_any:
+                    return
 
             # Detect leaving the initial loading screen
             # if data.get('common_define'):
