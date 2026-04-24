@@ -519,8 +519,10 @@ def get_gl_lesson_dict(force=False):
 
                 GL_LESSON_DICT.update({row[0]: (row[1], row[2]) for row in rows})
             except sqlite3.OperationalError as e:
-                logger.error( f"get_gl_lesson_dict failed: {e}\n{traceback.format_exc()}")
-    
+                # Grand Live scenario tables may not exist in every region's
+                # MDB (e.g. not released yet on Global). Expected — log quietly.
+                logger.debug(f"get_gl_lesson_dict skipped: {e}")
+
     return GL_LESSON_DICT
 
 GROUP_CARD_EFFECT_IDS = []
