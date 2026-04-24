@@ -295,6 +295,19 @@ class CarrotJuicer:
             if isinstance(data, dict) and 'common_define' in data and 'user_info' in data:
                 account.capture_home_packet(data)
 
+            # Diagnostic: log any response that looks race-related so we can
+            # see what Champions Meet actually sends when detection misses.
+            if isinstance(data, dict):
+                top_keys = list(data.keys())
+                looks_racey = any(
+                    'race' in k or 'champion' in k or 'tournament' in k or 'stadium' in k
+                    for k in top_keys
+                )
+                if looks_racey and 'race_horse_data_array' not in data:
+                    req_keys = list((self.previous_request or {}).keys()) if isinstance(self.previous_request, dict) else []
+                    logger.info(f"[race-diag] response top-level keys: {sorted(top_keys)}")
+                    logger.info(f"[race-diag] preceding request keys:  {sorted(req_keys)}")
+
             # Standalone race logging (Room Match, Champions Meet, etc.)
             # race_horse_data_array at top level only appears in standalone races,
             # never in training (where it's nested inside race_start_info).
