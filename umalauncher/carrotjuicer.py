@@ -291,6 +291,13 @@ class CarrotJuicer:
 
             data = data['data']
 
+            # Diagnostic: log EVERY response's top-level keys while we're
+            # hunting Champions Meet. Too chatty for permanent use but
+            # necessary to find the packet that carries race_scenario.
+            if isinstance(data, dict):
+                top_keys = sorted(data.keys())
+                logger.info(f"[pkt] {len(top_keys)} keys: {top_keys[:15]}{'...' if len(top_keys)>15 else ''}")
+
             # Capture account data from home screen packet
             if isinstance(data, dict) and 'common_define' in data and 'user_info' in data:
                 account.capture_home_packet(data)
