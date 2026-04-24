@@ -295,33 +295,31 @@ class CarrotJuicer:
             if isinstance(data, dict) and 'common_define' in data and 'user_info' in data:
                 account.capture_home_packet(data)
 
-            # Diagnostic: log any response that looks race-related so we can
-            # see what Champions Meet actually sends when detection misses.
-            if isinstance(data, dict):
-                top_keys = list(data.keys())
-                looks_racey = any(
-                    'race' in k or 'champion' in k or 'tournament' in k or 'stadium' in k
-                    for k in top_keys
-                )
-                if looks_racey and 'race_horse_data_array' not in data:
+            # Diagnostic: recursively hunt for race_scenario anywhere in the
+            # response tree. Champions Meet individual races must send it
+            # somewhere — this'll pinpoint exactly where.
+            if isinstance(data, dict) and 'race_horse_data_array' not in data:
+                def _find_race_scenario(node, path, hits):
+                    if len(hits) >= 3:
+                        return
+                    if isinstance(node, dict):
+                        for k, v in node.items():
+                            sub = path + [str(k)]
+                            if k == 'race_scenario' and isinstance(v, str) and len(v) > 100:
+                                hits.append('.'.join(sub) + f' (base64 len={len(v)})')
+                            else:
+                                _find_race_scenario(v, sub, hits)
+                    elif isinstance(node, list):
+                        for i, item in enumerate(node[:3]):
+                            _find_race_scenario(item, path + [f'[{i}]'], hits)
+
+                hits = []
+                _find_race_scenario(data, [], hits)
+                if hits:
                     req_keys = list((self.previous_request or {}).keys()) if isinstance(self.previous_request, dict) else []
-                    logger.info(f"[race-diag] response top-level keys: {sorted(top_keys)}")
-                    logger.info(f"[race-diag] preceding request keys:  {sorted(req_keys)}")
-                    # Drill into race_result_array — Champions Meet appears to
-                    # nest the race_horse_data + race_scenario one level deep.
-                    rra = data.get('race_result_array')
-                    if isinstance(rra, list) and rra and isinstance(rra[0], dict):
-                        logger.info(f"[race-diag] race_result_array[0] keys: {sorted(rra[0].keys())}")
-                        for inner_key in ('race_horse_data_array', 'race_scenario', 'race_result'):
-                            v = rra[0].get(inner_key)
-                            if isinstance(v, list):
-                                logger.info(f"[race-diag]   {inner_key}: list len={len(v)}")
-                            elif isinstance(v, dict):
-                                logger.info(f"[race-diag]   {inner_key}: dict keys={sorted(v.keys())[:10]}")
-                            elif isinstance(v, str):
-                                logger.info(f"[race-diag]   {inner_key}: str len={len(v)} (probably race_scenario base64)")
-                            elif v is not None:
-                                logger.info(f"[race-diag]   {inner_key}: {type(v).__name__}")
+                    logger.info(f"[race-diag] top-level keys: {sorted(data.keys())}")
+                    logger.info(f"[race-diag] preceding request: {sorted(req_keys)}")
+                    logger.info(f"[race-diag] race_scenario found at: {hits}")
 
             # Standalone race logging (Room Match, Champions Meet, etc.)
             # Room Match: race_horse_data_array + race_scenario at top level.
