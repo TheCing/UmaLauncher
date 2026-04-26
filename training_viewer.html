@@ -1539,12 +1539,15 @@ function renderDashboard(run) {
 
   const supports = [1,2,3,4,5,6].map(i => parseSupport(col(first, 'Support ' + i, runCOL)));
 
+  const totalRaces = rows.filter(r => col(r, 'Action', runCOL) === 'Race').length;
+
   runInfo.innerHTML = `
     <h3>Run Info</h3>
     <div class="run-info-top">
       <div class="run-info-item"><span>Scenario:</span> ${col(first, 'Scenario', runCOL)}</div>
       <div class="run-info-item"><span>Character:</span> ${col(first, 'Chara', runCOL)}</div>
       <div class="run-info-item"><span>Turns:</span> ${col(last, 'Turn', runCOL)}</div>
+      <div class="run-info-item"><span>Races:</span> ${totalRaces}</div>
     </div>
     <div class="support-cards-grid">
       ${supports.map(s => `
