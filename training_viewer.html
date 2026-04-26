@@ -1561,13 +1561,21 @@ function renderDashboard(run) {
     </div>
   `;
 
-  // Final stats
+  // Final stats. For SKLPT, "final" is misleading — it's the leftover
+  // balance after end-of-career skill purchases. Show total SP EARNED
+  // (sum of positive ΔSKLPT across the run) instead, which matches what
+  // a player intuitively means by "skill points this run".
   const stats = ['SPD', 'STA', 'POW', 'GUT', 'INT', 'SKLPT', 'FAN'];
+  const totalSpEarned = rows.reduce((sum, r) => {
+    const delta = num(r, 'ΔSKLPT', runCOL);
+    return sum + (delta > 0 ? delta : 0);
+  }, 0);
   const statsContainer = document.getElementById('finalStats');
   statsContainer.innerHTML = stats.map(s => {
-    const finalVal = num(last, s, runCOL);
+    const finalVal = s === 'SKLPT' ? totalSpEarned : num(last, s, runCOL);
+    const labelOverride = s === 'SKLPT' ? 'SP Earned' : loc(s);
     return `<div class="stat-card">
-      <div class="label">${loc(s)}</div>
+      <div class="label">${labelOverride}</div>
       <div class="value" style="color:${STAT_COLORS[s] || '#fff'}">${finalVal.toLocaleString()}</div>
     </div>`;
   }).join('');
