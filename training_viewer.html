@@ -1229,6 +1229,68 @@ const COMMAND_NAMES = {
 };
 const MOTIVATION_NAMES = {5:'Very High',4:'High',3:'Normal',2:'Low',1:'Very Low'};
 
+// Maps support type (lowercase) -> set of command_ids that count as a
+// matching training type. Mirrors constants.SUPPORT_TYPE_TO_COMMAND_IDS
+// so the rainbow detector matches the Python TrainingAnalyzer.
+const SUPPORT_TYPE_TO_COMMAND_IDS = {
+  speed:   new Set([101, 601, 901, 1101, 2101, 2201, 2301, 3601]),
+  stamina: new Set([105, 602, 905, 1102, 2102, 2202, 2302, 3602]),
+  power:   new Set([102, 603, 902, 1103, 2103, 2203, 2303, 3603]),
+  guts:    new Set([103, 604, 903, 1104, 2104, 2204, 2304, 3604]),
+  wiz:     new Set([106, 605, 906, 1105, 2105, 2205, 2305, 3605]),
+};
+
+function _supportTypeKey(displayType) {
+  // SUPPORT_CARD_META uses display names ("Wisdom"). Match the lowercase
+  // keys SUPPORT_TYPE_TO_COMMAND_IDS expects.
+  const t = String(displayType || '').toLowerCase();
+  return t === 'wisdom' ? 'wiz' : t;
+}
+
+function _detectRainbow(commandId, prevResp, supportIds) {
+  if (!commandId || !prevResp || !supportIds || !supportIds.length) return 0;
+
+  // Bond per training_partner_id from prev_resp.chara_info.evaluation_info_array.
+  const bonds = {};
+  const evals = prevResp.chara_info && prevResp.chara_info.evaluation_info_array;
+  if (Array.isArray(evals)) {
+    evals.forEach(e => { bonds[e.training_partner_id] = e.evaluation; });
+  }
+
+  // Find the executed command's training_partner_array (also check
+  // scenario-specific *_data_set buckets, like the Python tracker).
+  let cmdData = null;
+  const homeArr = prevResp.home_info && prevResp.home_info.command_info_array;
+  if (Array.isArray(homeArr)) {
+    cmdData = homeArr.find(c => c.command_id === commandId);
+  }
+  if (!cmdData) {
+    for (const k in prevResp) {
+      if (k.endsWith('_data_set') && prevResp[k] && Array.isArray(prevResp[k].command_info_array)) {
+        cmdData = prevResp[k].command_info_array.find(c => c.command_id === commandId);
+        if (cmdData) break;
+      }
+    }
+  }
+  if (!cmdData) return 0;
+
+  let count = 0;
+  for (const partnerId of (cmdData.training_partner_array || [])) {
+    if (partnerId < 1 || partnerId > 6) continue;
+    const sid = supportIds[partnerId - 1];
+    if (!sid) continue;
+    const meta = (typeof SUPPORT_CARD_META !== 'undefined') ? SUPPORT_CARD_META[String(sid)] : null;
+    if (!meta) continue;
+    const typeKey = _supportTypeKey(meta.type);
+    if (typeKey === 'friend' || typeKey === 'group') continue;
+    const bond = bonds[partnerId] || 0;
+    if (bond < 80) continue;
+    const cmdSet = SUPPORT_TYPE_TO_COMMAND_IDS[typeKey];
+    if (cmdSet && cmdSet.has(commandId)) count++;
+  }
+  return count;
+}
+
 function parseGzPackets(textOrJson, fileName) {
   let packets;
   try {
@@ -1294,6 +1356,7 @@ function parseGzPackets(textOrJson, fileName) {
 
     // Determine action type
     let actionType = 'Unknown', actionText = '', actionValue = '';
+    let rainbowCount = 0;
     if (req.start_chara) {
       actionType = 'Start';
     } else if (req.continue_type) {
@@ -1314,6 +1377,7 @@ function parseGzPackets(textOrJson, fileName) {
       const cmdId = req.command_id || (req.single_mode_exec_command_request_common && req.single_mode_exec_command_request_common.command_id);
       actionText = COMMAND_NAMES[cmdId] || ('Cmd ' + cmdId);
       actionValue = lastFailRates[cmdId] != null ? lastFailRates[cmdId] : '';
+      rainbowCount = _detectRainbow(cmdId, prevResp, supports);
     } else if (req.command_type === 7 || (req.single_mode_exec_command_request_common && req.single_mode_exec_command_request_common.command_type === 7)) {
       actionType = 'Rest';
     } else if (req.command_type === 3 || (req.single_mode_exec_command_request_common && req.single_mode_exec_command_request_common.command_type === 3)) {
@@ -1354,6 +1418,7 @@ function parseGzPackets(textOrJson, fileName) {
       turn, spd, sta, pow, gut, wiz, sklpt, energy, mot, fans,
       dspd, dsta, dpow, dgut, dwiz, dsklpt, denergy, dmot, dfans,
       actionType, actionText, actionValue,
+      rainbow: rainbowCount,
       addedSkills, removedSkills, addedHints,
       addedStatuses: addedStatuses.join('|'), removedStatuses: removedStatuses.join('|'),
       skills, hints, statuses,
@@ -1395,6 +1460,7 @@ function parseGzPackets(textOrJson, fileName) {
     r[COL['Action']] = a.actionType;
     r[COL['Text']] = a.actionText;
     r[COL['Value']] = String(a.actionValue);
+    r[COL['Rainbow']] = a.rainbow > 0 ? String(a.rainbow) : '';
     r[COL['SPD']] = String(a.spd); r[COL['STA']] = String(a.sta);
     r[COL['POW']] = String(a.pow); r[COL['GUT']] = String(a.gut);
     r[COL['INT']] = String(a.wiz); r[COL['SKLPT']] = String(a.sklpt);
