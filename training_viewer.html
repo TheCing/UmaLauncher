@@ -1556,8 +1556,18 @@ function parseGzPackets(textOrJson, fileName) {
       addedStatuses: addedStatuses.join('|'), removedStatuses: removedStatuses.join('|'),
       skills, hints, statuses,
     };
-    actions.push(action);
-    prevAction = action;
+    // Match Python CSV export: drop Unknown actions that don't change
+    // anything (race-entry-confirmation packets, etc.) so the Turn
+    // Explorer doesn't show 30+ noise rows in race-heavy scenarios.
+    const isNoOpUnknown = action.actionType === 'Unknown' && (
+      !dspd && !dsta && !dpow && !dgut && !dwiz && !dsklpt && !denergy && !dmot && !dfans &&
+      !addedSkills && !removedSkills && !addedHints &&
+      !addedStatuses.length && !removedStatuses.length
+    );
+    if (!isNoOpUnknown) {
+      actions.push(action);
+      prevAction = action;
+    }
     prevResp = resp;
   }
 
