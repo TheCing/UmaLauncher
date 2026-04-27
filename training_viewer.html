@@ -1477,8 +1477,47 @@ function parseGzPackets(textOrJson, fileName) {
       actionType = 'Infirmary';
     } else if (resp.race_scenario) {
       actionType = 'Race';
-    } else if (resp.home_info && prevAction && prevAction.actionType === 'Race') {
+      const rsi = resp.race_start_info;
+      if (rsi && rsi.program_id) {
+        const pid = String(rsi.program_id);
+        actionText = (typeof RACE_META !== 'undefined' && RACE_META[pid]) || ('Race ' + pid);
+      }
+    } else if (resp.race_reward_info) {
+      // Authoritative AfterRace signal — Python tracker uses this too.
       actionType = 'AfterRace';
+      actionValue = resp.race_reward_info.result_rank || '';
+    } else if (req.gain_skill_info_array && req.gain_skill_info_array.length) {
+      actionType = 'BuySkill';
+    } else if (scenarioId === 4 && req.exchange_item_info_array) {
+      // MANT — buying items
+      actionType = 'BuyItem';
+    } else if (scenarioId === 4 && req.use_item_info_array) {
+      // MANT — using items
+      actionType = 'UseItem';
+    } else if (scenarioId === 3 && req.square_id != null) {
+      // Grand Live — Lesson
+      actionType = 'Lesson';
+      actionValue = req.square_id;
+    } else if (scenarioId === 5 && resp.venus_data_set && Array.isArray(resp.venus_data_set.venus_spirit_active_effect_info_array) && resp.venus_data_set.venus_spirit_active_effect_info_array.length) {
+      // Grand Masters — Goddess Wisdom activation
+      actionType = 'GoddessWisdom';
+      const goddessId = resp.venus_data_set.venus_spirit_active_effect_info_array[0].chara_id;
+      actionText = (CHARA_ID_TO_NAME[String(goddessId)]) || ('Chara ' + goddessId);
+    } else if (scenarioId === 2 && req.team_race_set_id) {
+      // Aoharu — team race set
+      actionType = 'AoharuRaces';
+      const tdsr = resp.team_data_set && resp.team_data_set.race_result_array;
+      if (Array.isArray(tdsr)) {
+        const r = [0, 0, 0];
+        for (const race of tdsr) {
+          const wt = race.win_type;
+          if (wt >= 1 && wt <= 3) r[wt - 1]++;
+        }
+        actionText = `${r[0]} WIN - ${r[1]} LOSS - ${r[2]} DRAW`;
+      }
+    } else if (scenarioId === 6 && resp.selection_result_info) {
+      // Project L'Arc — SS Match
+      actionType = 'SSMatch';
     }
 
     // Capture failure rates for next turn
