@@ -2,6 +2,7 @@ import urllib.request
 import subprocess
 import time
 import os
+import re
 import shutil
 import threading
 import sys
@@ -13,11 +14,45 @@ import glob
 
 VERSION = "1.18.3"
 
+# Fallback if no remote_url.txt was recorded at build time.
+DEFAULT_RELEASE_REPO = "TheCing/UmaLauncher"
+
+
 def parse_version(version_string: str):
-    """Convert version string to tuple."""
+    """Convert version string to tuple, tolerant of '-modN' or other suffixes.
+
+    Plain "1.18.3"      -> (1, 18, 3)
+    Mod tag "1.18.3-mod1" -> (1, 18, 3, 1)
+    "1.18.3-rc2" / etc.   -> (1, 18, 3, 2)
+
+    Tuple comparison handles cross-form comparisons sensibly:
+    (1,18,4) > (1,18,3,5)  (real release > any mod of older base)
+    (1,18,3,2) > (1,18,3)  (mod2 newer than the un-modded base)
+    """
     if not version_string:
-        return (0,0,0)
-    return tuple(int(num) for num in version_string.split("."))
+        return (0, 0, 0)
+    parts = version_string.split('-', 1)
+    try:
+        base = tuple(int(num) for num in parts[0].split("."))
+    except ValueError:
+        return (0, 0, 0)
+    if len(parts) > 1:
+        m = re.search(r'(\d+)', parts[1])
+        if m:
+            base = base + (int(m.group(1)),)
+    return base
+
+
+def _release_repo():
+    """Returns 'owner/repo' to query for releases. Read from the build-time
+    remote URL so each fork auto-checks its own releases (rather than every
+    fork's exe phoning home to upstream)."""
+    raw = util.get_remote_url()
+    if raw and raw != "(Unknown)":
+        m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", raw)
+        if m:
+            return f"{m.group(1)}/{m.group(2)}"
+    return DEFAULT_RELEASE_REPO
 
 def vstr(version_tuple: tuple):
     """Convert version tuple to string."""
@@ -132,12 +167,14 @@ def auto_update(umasettings, force=False):
         logger.info("Skipping auto-update because you are running the script version.")
         return True
 
+    repo = _release_repo()
+
     # Check if we're coming from an update
     if os.path.exists("update.tmp"):
         os.remove("update.tmp")
-        util.show_info_box("Update complete!", f"Uma Launcher updated successfully to v{vstr(script_version)}.<br>To see what's new, <a href=\"https://github.com/qwcan/UmaLauncher/releases/tag/v{vstr(script_version)}\">click here</a>.")
+        util.show_info_box("Update complete!", f"Uma Launcher updated successfully to v{vstr(script_version)}.<br>To see what's new, <a href=\"https://github.com/{repo}/releases/tag/v{vstr(script_version)}\">click here</a>.")
 
-    response = util.do_get_request("https://api.github.com/repos/qwcan/UmaLauncher/releases", error_message="Could not check for updates. Please check your internet connection.", ignore_timeout=True)
+    response = util.do_get_request(f"https://api.github.com/repos/{repo}/releases", error_message="Could not check for updates. Please check your internet connection.", ignore_timeout=True)
     if not response:
         return True
     response_json = response.json()
