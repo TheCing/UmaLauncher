@@ -9,3 +9,6 @@ sandbox.*
 .idea/*
 appdata/*
 packet_keys_log.txt
+umalauncher/_assets/branch.txt
+umalauncher/_assets/build_date.txt
+umalauncher/_assets/commit_hash.txt
