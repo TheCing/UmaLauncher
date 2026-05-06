@@ -790,4 +790,4 @@ def get_remote_url(force=False):
             remote_url = open(file_path, 'r').read().strip()
     if remote_url is None:
         return "(Unknown)"
-    return build_date
+    return remote_url
