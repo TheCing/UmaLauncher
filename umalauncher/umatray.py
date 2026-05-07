@@ -30,6 +30,7 @@ class UmaTray():
         menu_items.append(pystray.MenuItem("Export Account Data", lambda: self.export_account()))
         menu_items.append(pystray.MenuItem("Recommend skill buys", lambda: self.recommend_skill_buys()))
         menu_items.append(pystray.MenuItem("Open Training Viewer", lambda: self.open_training_viewer()))
+        menu_items.append(pystray.MenuItem("Open last race in Hakuraku", lambda: self.open_last_race_in_hakuraku()))
         menu_items.append(pystray.Menu.SEPARATOR)
         menu_items.append(pystray.MenuItem("Close", lambda: close_clicked(self)))
         # if util.is_debug:
@@ -144,6 +145,26 @@ class UmaTray():
             return
         url = "file:///" + dst.replace("\\", "/")
         webbrowser.open(url)
+
+    def open_last_race_in_hakuraku(self):
+        """Open the most recent race log in a locally-running Hakuraku instance.
+
+        Pipeline:
+          1. UmaServer's /last-race endpoint serves the latest race JSON from
+             appdata/{region}/race_logs/.
+          2. Hakuraku's RaceDataPage (patched) accepts ?fetchUrl=URL and
+             pulls + parses any HorseACT-format JSON from there.
+          3. Browser navigates to localhost:HAKURAKU_PORT/race?fetchUrl=...
+
+        Requires a local Hakuraku dev server running (default Vite port 5173).
+        """
+        hakuraku_port = self.threader.settings.get("hakuraku_port", 5173)
+        race_url = f"http://127.0.0.1:3150/last-race"
+        from urllib.parse import quote
+        target = f"http://localhost:{hakuraku_port}/race?fetchUrl={quote(race_url, safe='')}"
+        logger.info(f"Opening Hakuraku race view: {target}")
+        webbrowser.open(target)
+
 
 def close_clicked(tray: UmaTray):
     tray.threader.stop()

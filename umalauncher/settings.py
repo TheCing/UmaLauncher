@@ -75,6 +75,14 @@ class DefaultSettings(se.NewSettings):
             'open_training_logs',
             se.SettingType.COMMANDBUTTON,
         ),
+        "hakuraku_port": se.Setting(
+            "Hakuraku local port",
+            "Port the locally-running Hakuraku dev server listens on. "
+            "Used by the 'Open last race in Hakuraku' tray entry. Default 5173 matches Vite.",
+            5173,
+            se.SettingType.INT,
+            max_value=65535,
+        ),
         "autoclose_dmm": se.Setting(
             "Autoclose DMM Game Player",
             "Automatically close DMM Game Player when the game is launched.",
