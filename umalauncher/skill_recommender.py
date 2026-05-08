@@ -51,6 +51,16 @@ FAST_LEARNER_DISCOUNT = 0.0  # Optional trainee skill — toggle to 0.10 if pres
 # Matches UmaTools' BUCKET_MULTIPLIER in rating-shared.js.
 BUCKET_MULTIPLIER = {'good': 1.10, 'average': 0.90, 'bad': 0.80, 'terrible': 0.70, 'base': 1.0}
 
+# Rarity values that identify the character's OWN unique skill (vs. an
+# inherited/skill-of-a-parent unique). The character's unique is scored
+# via unique_bonus (level × per-star-multiplier), NOT as a regular skill.
+#   rarity=4 — evolved unique (only ~17 characters have these)
+#   rarity=5 — base unique (every character has one)
+#   rarity=3 — INHERITED unique passed from a parent in succession; this
+#              is just a regular skill on the runner, no unique_bonus.
+UNIQUE_OWN_RARITIES = {4, 5}
+
+
 # Aptitude value (1-8) → bucket. 1=G, 2=F, 3=E, 4=D, 5=C, 6=B, 7=A, 8=S.
 APTITUDE_BUCKETS = {
     8: 'good', 7: 'good',           # S, A
@@ -301,6 +311,10 @@ def build_candidate_pool(chara_info):
         base_cost, base_grade, group_id, rarity = row
         if base_grade <= 0:
             continue
+        # Don't suggest the chara's own unique — it's already in the unique
+        # bonus path; you can't buy it again at end-of-career.
+        if rarity in UNIQUE_OWN_RARITIES:
+            continue
         # Skip if the group is already locked by an owned skill in that slot.
         if group_id in owned_groups:
             continue
@@ -420,8 +434,9 @@ def compute_rating_breakdown(chara_info, extra_skill_score=0):
         if not row:
             continue
         base_grade, _group_id, rarity = row
-        # Rarity 4 = character unique skill; scored separately via unique_bonus.
-        if rarity == 4:
+        # Character's own unique skill — scored separately via unique_bonus.
+        # See UNIQUE_OWN_RARITIES for which rarities qualify.
+        if rarity in UNIQUE_OWN_RARITIES:
             unique_level = max(unique_level, int(s.get('level', 0)))
             continue
         if base_grade <= 0:
