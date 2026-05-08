@@ -1168,6 +1168,79 @@ class UmaSimpleDialog(UmaMainDialog):
         self.layout.addWidget(self.label)
 
 
+class UmaSkillFilterDialog(UmaMainWidget):
+    """Pre-popup picker for the Skill Recommender — lets the user constrain
+    suggestions to a specific running style and distance, so skills tagged
+    for other styles/distances get dropped before the knapsack runs.
+
+    Result is appended to `choice` as a tuple (distance_key, style_key) where
+    each is one of: '' (any), 'sprint', 'mile', 'medium', 'long' (distance)
+    or 'front', 'pace', 'late', 'end' (style). Empty string == no filter.
+    """
+    DISTANCES = [("", "Any"), ("sprint", "Sprint"), ("mile", "Mile"), ("medium", "Medium"), ("long", "Long")]
+    STYLES = [("", "Any"), ("front", "Front (Nige)"), ("pace", "Pace (Senko)"), ("late", "Late (Sashi)"), ("end", "End (Oikomi)")]
+
+    def init_ui(self, choice: list, default_distance="", default_style="", *args, **kwargs):
+        self.choice = choice
+        self.setWindowTitle("Skill Recommender — filter by role")
+        self.setWindowFlag(qtc.Qt.WindowType.WindowStaysOnTopHint, True)
+        self.setWindowFlag(qtc.Qt.WindowType.WindowMaximizeButtonHint, False)
+        self.setWindowFlag(qtc.Qt.WindowType.WindowMinimizeButtonHint, False)
+
+        layout = qtw.QVBoxLayout()
+        self.setLayout(layout)
+
+        layout.addWidget(qtw.QLabel("Recommend only skills that match this style and distance.\nLeaves general (no-role) skills in either way."))
+
+        form = qtw.QFormLayout()
+        layout.addLayout(form)
+
+        self.distance_cmb = qtw.QComboBox()
+        for key, label in self.DISTANCES:
+            self.distance_cmb.addItem(label, key)
+            if key == default_distance:
+                self.distance_cmb.setCurrentIndex(self.distance_cmb.count() - 1)
+        form.addRow("Distance:", self.distance_cmb)
+
+        self.style_cmb = qtw.QComboBox()
+        for key, label in self.STYLES:
+            self.style_cmb.addItem(label, key)
+            if key == default_style:
+                self.style_cmb.setCurrentIndex(self.style_cmb.count() - 1)
+        form.addRow("Style:", self.style_cmb)
+
+        button_row = qtw.QHBoxLayout()
+        layout.addLayout(button_row)
+        ok_btn = qtw.QPushButton("Recommend")
+        ok_btn.clicked.connect(self._ok)
+        ok_btn.setDefault(True)
+        button_row.addWidget(ok_btn)
+        cancel_btn = qtw.QPushButton("Cancel")
+        cancel_btn.clicked.connect(self._cancel)
+        button_row.addWidget(cancel_btn)
+
+    @qtc.pyqtSlot()
+    def _ok(self):
+        self.choice.append((
+            self.distance_cmb.currentData(),
+            self.style_cmb.currentData(),
+        ))
+        self.close()
+
+    @qtc.pyqtSlot()
+    def _cancel(self):
+        # Append a sentinel so polling callers can distinguish cancel from
+        # "still waiting for the user".
+        self.choice.append(None)
+        self.close()
+
+    def closeEvent(self, event):
+        # Window-X also counts as cancel.
+        if not self.choice:
+            self.choice.append(None)
+        super().closeEvent(event)
+
+
 class UmaUpdateConfirm(UmaMainWidget):
     choice = None
 

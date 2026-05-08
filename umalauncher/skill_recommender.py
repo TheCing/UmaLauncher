@@ -498,7 +498,32 @@ def compute_rating_breakdown(chara_info, extra_skill_score=0):
     }
 
 
-def recommend(chara_info):
+def _skill_matches_filter(role_str, only_distance, only_style):
+    """Returns True if the skill should be kept under the user's filter.
+
+    Logic:
+      - Skill with empty role: always kept (universal — applies to any horse).
+      - only_distance set: skill kept only if it has no distance role component
+        OR one of its distance components matches `only_distance`.
+      - only_style set: same logic for style components.
+      - Multi-role like 'Mile/Late' has both a distance ('mile') and a style
+        ('late') component; both filters apply independently.
+    """
+    if not only_distance and not only_style:
+        return True
+    if not role_str:
+        return True
+    parts = [p.strip().lower() for p in role_str.split('/') if p.strip()]
+    distances = [p for p in parts if ROLE_GROUP.get(p) == 'distance']
+    styles = [p for p in parts if ROLE_GROUP.get(p) == 'style']
+    if only_distance and distances and only_distance not in distances:
+        return False
+    if only_style and styles and only_style not in styles:
+        return False
+    return True
+
+
+def recommend(chara_info, only_distance="", only_style=""):
     """Main entry point. Returns a dict with:
         selected: list of picked skill entries
         skipped:  list of unpicked candidates (sorted by grade-per-cost desc)
@@ -507,8 +532,14 @@ def recommend(chara_info):
         rating:   total aptitude-adjusted rating gained from the recommended buys
         current_breakdown: rating breakdown of the horse as-is
         projected_breakdown: rating breakdown assuming the recommended buys go through
+
+    `only_distance` and `only_style` (lowercase keys like 'mile', 'front')
+    optionally constrain the candidate pool to skills that match. Skills
+    with no role at all (universal) are always included.
     """
     pool, budget = build_candidate_pool(chara_info)
+    if only_distance or only_style:
+        pool = [it for it in pool if _skill_matches_filter(it.get('role', ''), only_distance, only_style)]
     current_breakdown = compute_rating_breakdown(chara_info)
 
     if not pool:

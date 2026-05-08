@@ -106,13 +106,41 @@ class UmaTray():
                 "No training packet captured yet.<br>Open the game and navigate into a training run first."
             )
             return
+        # Ask the user to optionally constrain by style + distance, persisting
+        # the last-used choice on the threader so reopening defaults sensibly.
+        # show_widget from a non-main thread queues onto threader.widget_queue
+        # and returns immediately, so we poll until the dialog appends.
+        last = getattr(self.threader, '_skill_filter_last', ('', ''))
+        choice = []
+        import gui as _gui
+        import time
+        _gui.show_widget(_gui.UmaSkillFilterDialog, choice,
+                         default_distance=last[0], default_style=last[1])
+        deadline = time.time() + 120  # 2-min cap for user to decide
+        while time.time() < deadline and not choice:
+            time.sleep(0.05)
+        if not choice or choice[-1] is None:
+            return  # user cancelled / closed / timed out
+        only_distance, only_style = choice[-1]
+        self.threader._skill_filter_last = (only_distance, only_style)
         try:
-            result = skill_recommender.recommend(data['chara_info'])
+            result = skill_recommender.recommend(
+                data['chara_info'],
+                only_distance=only_distance,
+                only_style=only_style,
+            )
         except Exception as e:
             logger.exception("Skill recommender failed")
             util.show_error_box_no_report("Skill Recommender", f"Failed to compute recommendation:<br>{e}")
             return
-        util.show_info_box("Skill Recommender", skill_recommender.format_html(result))
+        # Add a header line summarizing the active filter
+        filter_summary = ""
+        if only_distance or only_style:
+            parts = []
+            if only_distance: parts.append(f"distance={only_distance.title()}")
+            if only_style: parts.append(f"style={only_style.title()}")
+            filter_summary = f"<i>Filtered by {', '.join(parts)}</i><br>"
+        util.show_info_box("Skill Recommender", filter_summary + skill_recommender.format_html(result))
 
     def open_training_viewer(self):
         """Copy the bundled training_viewer.html into appdata and open it in the default browser.
