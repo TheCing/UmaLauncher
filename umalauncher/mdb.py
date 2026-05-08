@@ -309,6 +309,35 @@ def get_skill_meta_dict(force=False):
         SKILL_META_DICT.update({row[0]: (row[1], row[2], row[3]) for row in rows})
     return SKILL_META_DICT
 
+
+SKILL_CHAIN_DICT = {}
+def get_skill_chain_dict(force=False):
+    """Returns {group_id: [(skill_id, group_rate, rarity, base_cost, grade_value), ...]}
+    sorted by group_rate ascending.
+
+    Used by the skill recommender to model upgrade chains: within a group,
+    higher group_rate = upgraded tier (e.g. ○=1, ◎=2, gold=3, ×=-1 debuff).
+    Buying an upgrade requires owning all lower-rate tiers, so the cumulative
+    SP cost matters when evaluating end-state choices.
+    """
+    global SKILL_CHAIN_DICT
+    if force or not SKILL_CHAIN_DICT:
+        with Connection() as (_, cursor):
+            cursor.execute(
+                """SELECT sd.id, sd.group_id, sd.group_rate, sd.rarity,
+                          smsnp.need_skill_point, sd.grade_value
+                   FROM skill_data sd
+                   INNER JOIN single_mode_skill_need_point smsnp ON sd.id = smsnp.id"""
+            )
+            rows = cursor.fetchall()
+        chains = {}
+        for sid, gid, gr, rar, cost, grade in rows:
+            chains.setdefault(gid, []).append((sid, gr, rar, cost, grade))
+        for gid in chains:
+            chains[gid].sort(key=lambda r: r[1])  # ascending group_rate
+        SKILL_CHAIN_DICT.update(chains)
+    return SKILL_CHAIN_DICT
+
 SKILL_COST_GRADE_DICT = {}
 def get_skill_cost_grade_dict(force=False):
     """Returns {skill_id: (need_skill_point, grade_value, group_id, rarity)} for all skills with a cost entry.
@@ -818,6 +847,7 @@ UPDATE_FUNCS = [
     get_group_card_effect_ids,
     get_skill_id_dict,
     get_skill_cost_grade_dict,
+    get_skill_chain_dict,
     get_scouting_score_to_rank_dict,
     get_single_mode_unique_chara_dict,
     get_program_id_dict,

@@ -258,86 +258,121 @@ def _aptitude_multiplier(role_str, buckets):
 
 
 def build_candidate_pool(chara_info):
-    """Build the list of purchasable (non-owned) skills from a chara_info packet.
+    """Build the list of purchasable end-state options from a chara_info packet.
+
+    Models skill upgrade chains correctly: within a group_id, the variants
+    are ordered by `group_rate` (○=1 → ◎=2 → gold=3, with ×=-1 as debuff).
+    To END UP with a higher tier you must pay for every lower tier first
+    (and only the topmost tier's grade contributes to rating). So instead
+    of treating ○/◎/gold as independent alternatives at their raw costs,
+    each is offered as an end-state option with its CUMULATIVE chain cost.
 
     Returns (pool, budget). Pool entries contain:
-        skill_id, group_id, rarity, name, base_cost, hint_level, cost,
-        base_grade (raw grade_value), multiplier, grade (aptitude-adjusted)
+        skill_id, group_id, rarity, name, base_cost, hint_level, cost
+        (cumulative SP for the whole chain to this tier), chain (list of
+        skills that get bought along the way), base_grade, multiplier,
+        grade (aptitude-adjusted).
     """
-    skill_id_dict = mdb.get_skill_id_dict()
-    cost_grade = mdb.get_skill_cost_grade_dict()
+    chain_dict = mdb.get_skill_chain_dict()  # group_id -> sorted [(sid, gr, rar, cost, grade), ...]
     name_dict = mdb.get_skill_name_dict()
     role_map = _load_skill_roles()
     buckets = _build_aptitude_buckets(chara_info)
 
     budget = chara_info.get('skill_point', 0)
-
-    # Owned skills by skill_id and the set of their group_ids.
     owned_ids = {s['skill_id'] for s in chara_info.get('skill_array', [])}
-    owned_groups = set()
-    for sid in owned_ids:
-        row = cost_grade.get(sid)
-        if row:
-            owned_groups.add(row[2])  # group_id
 
-    # Hints — resolve (group_id, rarity) → skill_id via existing dict.
-    hint_levels = {}  # skill_id -> hint_level
+    # Hints stored by (group_id, rarity) so we can apply the same discount to
+    # every tier in that rarity within the group. (A "white hint Lv5" on the
+    # Firm group covers both ○ and ◎ since they're both rarity=1.) Presence
+    # of an entry also signals that this rarity is OFFERED in the end-of-
+    # career shop — without it, gold tiers aren't purchasable even if a
+    # lower tier is hinted.
+    hint_by_group_rarity = {}
     for tip in chara_info.get('skill_tips_array', []):
-        gid = tip['group_id']
-        rarity = tip['rarity']
+        key = (tip['group_id'], tip['rarity'])
         level = tip.get('level', 1)
-        sid = skill_id_dict.get((gid, rarity))
-        if sid is None:
-            logger.debug(f"No skill_id for hint ({gid},{rarity}) — skipping")
-            continue
-        # Keep the highest level if duplicated
-        if sid not in hint_levels or hint_levels[sid] < level:
-            hint_levels[sid] = level
+        if level > hint_by_group_rarity.get(key, 0):
+            hint_by_group_rarity[key] = level
 
-    # Inherent skills from the card (available at current talent level).
     card_id = chara_info.get('card_id', 0)
     talent_level = chara_info.get('talent_level', 99)
-    inherent = set(mdb.get_card_inherent_skills(card_id, talent_level))
+    inherent_ids = set(mdb.get_card_inherent_skills(card_id, talent_level))
 
-    # Candidate pool = (hints ∪ inherent) minus owned, filtered to entries with
-    # known cost + positive grade. Debuffs (negative grade) are never worth buying.
-    candidate_ids = (set(hint_levels.keys()) | inherent) - owned_ids
+    def _tier_offered(sid, gid, rar):
+        """A specific tier is reachable in the shop if it's either inherent
+        to the card or there's a hint at its (group_id, rarity)."""
+        return sid in inherent_ids or (gid, rar) in hint_by_group_rarity
+
+    # Reachable groups = anywhere any tier is offered.
+    reachable_groups = {gid for gid, _rar in hint_by_group_rarity.keys()}
+    for sid in inherent_ids:
+        for g, members in chain_dict.items():
+            if any(m[0] == sid for m in members):
+                reachable_groups.add(g)
+                break
 
     pool = []
-    for sid in candidate_ids:
-        row = cost_grade.get(sid)
-        if not row:
+    for gid in reachable_groups:
+        members = chain_dict.get(gid)
+        if not members:
             continue
-        base_cost, base_grade, group_id, rarity = row
-        if base_grade <= 0:
-            continue
-        # Don't suggest the chara's own unique — it's already in the unique
-        # bonus path; you can't buy it again at end-of-career.
-        if rarity in UNIQUE_OWN_RARITIES:
-            continue
-        # Skip if the group is already locked by an owned skill in that slot.
-        if group_id in owned_groups:
-            continue
-        hint_lv = hint_levels.get(sid, 0)
-        cost = _effective_cost(base_cost, hint_lv)
-        name = name_dict.get(sid, f"Skill {sid}")
-        role = role_map.get(_normalize_name(name), '')
-        multiplier = _aptitude_multiplier(role, buckets)
-        # Match UmaTools' Math.round(baseScore * factor) for display/DP parity.
-        grade = int(round(base_grade * multiplier))
-        pool.append({
-            'skill_id': sid,
-            'group_id': group_id,
-            'rarity': rarity,
-            'name': name,
-            'base_cost': base_cost,
-            'hint_level': hint_lv,
-            'cost': cost,
-            'base_grade': base_grade,
-            'role': role,
-            'multiplier': multiplier,
-            'grade': grade,
-        })
+
+        # Highest group_rate already owned in this chain (>0 only — debuffs
+        # don't satisfy upgrade prerequisites).
+        max_owned_gr = max(
+            (gr for sid, gr, _rar, _c, _g in members if sid in owned_ids and gr > 0),
+            default=0,
+        )
+
+        # Walk tiers in ascending group_rate, accumulating cost. Stop the
+        # chain at any tier that's not reachable (so a chara without the
+        # gold hint can't pretend they can buy a Demon-tier skill).
+        cumulative_cost = 0
+        cumulative_chain = []
+        for sid, gr, rar, base_cost, base_grade in members:
+            if gr <= 0:
+                continue  # debuff, not part of upgrade chain
+            if rar in UNIQUE_OWN_RARITIES:
+                continue  # uniques aren't end-of-career-buyable
+            if gr <= max_owned_gr:
+                continue  # already own this tier or a higher one
+            if not _tier_offered(sid, gid, rar):
+                # This tier is not in the shop for this chara — chain ends here.
+                break
+            if base_grade <= 0:
+                continue  # zero-grade skill, not worth buying
+
+            hint_lv = hint_by_group_rarity.get((gid, rar), 0)
+            tier_cost = _effective_cost(base_cost, hint_lv)
+            cumulative_cost += tier_cost
+            cumulative_chain.append({
+                'skill_id': sid,
+                'name': name_dict.get(sid, f"Skill {sid}"),
+                'cost': tier_cost,
+                'hint_level': hint_lv,
+                'rarity': rar,
+                'group_rate': gr,
+            })
+
+            # Viable end-state — emit it as a candidate.
+            name = name_dict.get(sid, f"Skill {sid}")
+            role = role_map.get(_normalize_name(name), '')
+            multiplier = _aptitude_multiplier(role, buckets)
+            grade = int(round(base_grade * multiplier))
+            pool.append({
+                'skill_id': sid,
+                'group_id': gid,
+                'rarity': rar,
+                'name': name,
+                'base_cost': base_cost,
+                'hint_level': hint_lv,
+                'cost': cumulative_cost,
+                'chain': list(cumulative_chain),  # snapshot
+                'base_grade': base_grade,
+                'role': role,
+                'multiplier': multiplier,
+                'grade': grade,
+            })
 
     return pool, budget
 
@@ -547,7 +582,14 @@ def format_html(result):
         role_suffix = f" <i>[{it['role']}]</i>" if it.get('role') else ""
         mult = it.get('multiplier', 1.0)
         mult_tag = f" ×{mult:.2f}" if abs(mult - 1.0) > 1e-6 else ""
-        return (f"<tr><td>{tag}</td><td>{it['name']}{hint_suffix}{role_suffix}</td>"
+        # Surface the chain when buying an upgraded tier requires also paying
+        # for prerequisites, e.g. "via ○ (90)" before reaching ◎.
+        chain = it.get('chain') or []
+        chain_note = ""
+        if len(chain) > 1:
+            prereqs = [f"{c['name']} ({c['cost']})" for c in chain[:-1]]
+            chain_note = f"<br><small style='color:#888'>via {' → '.join(prereqs)}</small>"
+        return (f"<tr><td>{tag}</td><td>{it['name']}{hint_suffix}{role_suffix}{chain_note}</td>"
                 f"<td align='right'>{it['cost']}</td>"
                 f"<td align='right'>+{it['grade']}{mult_tag}</td></tr>")
 
