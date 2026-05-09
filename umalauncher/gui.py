@@ -1180,7 +1180,7 @@ class UmaSkillFilterDialog(UmaMainWidget):
     DISTANCES = [("", "Any"), ("sprint", "Sprint"), ("mile", "Mile"), ("medium", "Medium"), ("long", "Long")]
     STYLES = [("", "Any"), ("front", "Front (Nige)"), ("pace", "Pace (Senko)"), ("late", "Late (Sashi)"), ("end", "End (Oikomi)")]
 
-    def init_ui(self, choice: list, default_distance="", default_style="", *args, **kwargs):
+    def init_ui(self, choice: list, default_distance="", default_style="", default_preset_id=None, presets=None, *args, **kwargs):
         self.choice = choice
         self.setWindowTitle("Skill Recommender — filter by role")
         self.setWindowFlag(qtc.Qt.WindowType.WindowStaysOnTopHint, True)
@@ -1190,7 +1190,10 @@ class UmaSkillFilterDialog(UmaMainWidget):
         layout = qtw.QVBoxLayout()
         self.setLayout(layout)
 
-        layout.addWidget(qtw.QLabel("Recommend only skills that match this style and distance.\nLeaves general (no-role) skills in either way."))
+        layout.addWidget(qtw.QLabel(
+            "Filter recommendations by what skills will actually trigger in your target race.\n"
+            "Skills with no specific role/condition are always kept."
+        ))
 
         form = qtw.QFormLayout()
         layout.addLayout(form)
@@ -1209,6 +1212,16 @@ class UmaSkillFilterDialog(UmaMainWidget):
                 self.style_cmb.setCurrentIndex(self.style_cmb.count() - 1)
         form.addRow("Style:", self.style_cmb)
 
+        self.preset_cmb = qtw.QComboBox()
+        self.preset_cmb.addItem("None (no race-condition filter)", None)
+        for p in (presets or []):
+            label = p.get('name') or f"CM #{p.get('id')}"
+            label += f" — {p.get('date', '?')}"
+            self.preset_cmb.addItem(label, p.get('id'))
+            if p.get('id') == default_preset_id:
+                self.preset_cmb.setCurrentIndex(self.preset_cmb.count() - 1)
+        form.addRow("Race preset:", self.preset_cmb)
+
         button_row = qtw.QHBoxLayout()
         layout.addLayout(button_row)
         ok_btn = qtw.QPushButton("Recommend")
@@ -1224,6 +1237,7 @@ class UmaSkillFilterDialog(UmaMainWidget):
         self.choice.append((
             self.distance_cmb.currentData(),
             self.style_cmb.currentData(),
+            self.preset_cmb.currentData(),
         ))
         self.close()
 

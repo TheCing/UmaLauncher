@@ -36,6 +36,7 @@ Affinity roles are sourced from UmaTools' `uma_skills.csv` (bundled at
 CSV role match fall back to `base = 1.0` — the raw grade value.
 """
 import csv
+import json
 import os
 from loguru import logger
 
@@ -94,6 +95,95 @@ ROLE_GROUP = {
 
 _SKILL_ROLE_CACHE = None
 _STAT_SCORES_CACHE = None
+_CM_PRESETS_CACHE = None
+_COURSE_SPECS_CACHE = None
+_SKILL_CONSTRAINTS_CACHE = None
+
+
+def _load_json_asset(name):
+    path = util.get_asset(os.path.join('_assets', name))
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.warning(f"{name} not found at {path}")
+        return None
+    except Exception:
+        logger.exception(f"Failed to load {name}")
+        return None
+
+
+def _load_cm_presets():
+    global _CM_PRESETS_CACHE
+    if _CM_PRESETS_CACHE is None:
+        _CM_PRESETS_CACHE = _load_json_asset('cm_presets.json') or []
+    return _CM_PRESETS_CACHE
+
+
+def _load_course_specs():
+    global _COURSE_SPECS_CACHE
+    if _COURSE_SPECS_CACHE is None:
+        _COURSE_SPECS_CACHE = _load_json_asset('course_specs.json') or {}
+    return _COURSE_SPECS_CACHE
+
+
+def _load_skill_constraints():
+    global _SKILL_CONSTRAINTS_CACHE
+    if _SKILL_CONSTRAINTS_CACHE is None:
+        _SKILL_CONSTRAINTS_CACHE = _load_json_asset('skill_race_constraints.json') or {}
+    return _SKILL_CONSTRAINTS_CACHE
+
+
+def _race_spec_from_preset(preset):
+    """Expand a CM/LOH preset dict into a flat {field: value} race spec the
+    skill-constraint matcher consumes. Returns None if the preset is unknown."""
+    if not preset:
+        return None
+    course_id = str(preset.get('courseId', ''))
+    course = _load_course_specs().get(course_id)
+    if not course:
+        return None
+    return {
+        'track_id': course['track_id'],
+        'distance': course['distance'],
+        'distance_type': course['distance_type'],
+        'ground_type': course['surface'],  # 1=turf, 2=dirt
+        'rotation': course['turn'],         # 1=right, 2=left, 4=straight
+        'ground_condition': preset.get('ground'),
+        'weather': preset.get('weather'),
+        'season': preset.get('season'),
+    }
+
+
+def _skill_passes_race(skill_id, race_spec):
+    """Return True if the skill's bundled constraints are satisfiable on the
+    given race. Skills with no constraints (no entry in the table) pass.
+    """
+    if not race_spec:
+        return True
+    constraints = _load_skill_constraints().get(str(skill_id))
+    if not constraints:
+        return True
+    for field, rule in constraints.items():
+        race_val = race_spec.get(field)
+        if race_val is None:
+            # Race spec doesn't pin this field — be permissive.
+            continue
+        eq = rule.get('eq')
+        neq = rule.get('neq')
+        if eq and race_val not in eq:
+            return False
+        if neq and race_val in neq:
+            return False
+        if rule.get('lt') is not None and not (race_val < rule['lt']):
+            return False
+        if rule.get('le') is not None and not (race_val <= rule['le']):
+            return False
+        if rule.get('gt') is not None and not (race_val > rule['gt']):
+            return False
+        if rule.get('ge') is not None and not (race_val >= rule['ge']):
+            return False
+    return True
 
 
 def _build_stat_scores():
@@ -523,7 +613,7 @@ def _skill_matches_filter(role_str, only_distance, only_style):
     return True
 
 
-def recommend(chara_info, only_distance="", only_style=""):
+def recommend(chara_info, only_distance="", only_style="", race_preset_id=None):
     """Main entry point. Returns a dict with:
         selected: list of picked skill entries
         skipped:  list of unpicked candidates (sorted by grade-per-cost desc)
@@ -534,12 +624,23 @@ def recommend(chara_info, only_distance="", only_style=""):
         projected_breakdown: rating breakdown assuming the recommended buys go through
 
     `only_distance` and `only_style` (lowercase keys like 'mile', 'front')
-    optionally constrain the candidate pool to skills that match. Skills
-    with no role at all (universal) are always included.
+    optionally constrain the candidate pool by skill role. Skills with no
+    role (universal) are always included.
+
+    `race_preset_id` (int matching cm_presets.json `id` field) optionally
+    drops skills whose conditions can't be met on the chosen race —
+    e.g. picking CM11 (Pisces Cup, Tokyo, heavy track, rainy) excludes
+    Right-Handed bonuses and Firm-Course skills.
     """
     pool, budget = build_candidate_pool(chara_info)
     if only_distance or only_style:
         pool = [it for it in pool if _skill_matches_filter(it.get('role', ''), only_distance, only_style)]
+    race_spec = None
+    if race_preset_id is not None:
+        preset = next((p for p in _load_cm_presets() if p.get('id') == race_preset_id), None)
+        race_spec = _race_spec_from_preset(preset)
+        if race_spec:
+            pool = [it for it in pool if _skill_passes_race(it['skill_id'], race_spec)]
     current_breakdown = compute_rating_breakdown(chara_info)
 
     if not pool:

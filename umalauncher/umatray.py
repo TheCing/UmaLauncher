@@ -106,40 +106,48 @@ class UmaTray():
                 "No training packet captured yet.<br>Open the game and navigate into a training run first."
             )
             return
-        # Ask the user to optionally constrain by style + distance, persisting
-        # the last-used choice on the threader so reopening defaults sensibly.
-        # show_widget from a non-main thread queues onto threader.widget_queue
-        # and returns immediately, so we poll until the dialog appends.
-        last = getattr(self.threader, '_skill_filter_last', ('', ''))
+        # Ask the user to optionally constrain by style + distance + race
+        # preset. Persist last-used choice on the threader so reopening
+        # defaults sensibly. show_widget from a non-main thread queues onto
+        # threader.widget_queue and returns immediately, so we poll until
+        # the dialog appends.
+        last = getattr(self.threader, '_skill_filter_last', ('', '', None))
         choice = []
         import gui as _gui
         import time
-        _gui.show_widget(_gui.UmaSkillFilterDialog, choice,
-                         default_distance=last[0], default_style=last[1])
+        _gui.show_widget(
+            _gui.UmaSkillFilterDialog, choice,
+            default_distance=last[0], default_style=last[1],
+            default_preset_id=last[2] if len(last) > 2 else None,
+            presets=skill_recommender._load_cm_presets(),
+        )
         deadline = time.time() + 120  # 2-min cap for user to decide
         while time.time() < deadline and not choice:
             time.sleep(0.05)
         if not choice or choice[-1] is None:
             return  # user cancelled / closed / timed out
-        only_distance, only_style = choice[-1]
-        self.threader._skill_filter_last = (only_distance, only_style)
+        only_distance, only_style, race_preset_id = choice[-1]
+        self.threader._skill_filter_last = (only_distance, only_style, race_preset_id)
         try:
             result = skill_recommender.recommend(
                 data['chara_info'],
                 only_distance=only_distance,
                 only_style=only_style,
+                race_preset_id=race_preset_id,
             )
         except Exception as e:
             logger.exception("Skill recommender failed")
             util.show_error_box_no_report("Skill Recommender", f"Failed to compute recommendation:<br>{e}")
             return
-        # Add a header line summarizing the active filter
-        filter_summary = ""
-        if only_distance or only_style:
-            parts = []
-            if only_distance: parts.append(f"distance={only_distance.title()}")
-            if only_style: parts.append(f"style={only_style.title()}")
-            filter_summary = f"<i>Filtered by {', '.join(parts)}</i><br>"
+        # Header line summarizing the active filter
+        filter_parts = []
+        if only_distance: filter_parts.append(f"distance={only_distance.title()}")
+        if only_style: filter_parts.append(f"style={only_style.title()}")
+        if race_preset_id is not None:
+            preset = next((p for p in skill_recommender._load_cm_presets() if p.get('id') == race_preset_id), None)
+            if preset:
+                filter_parts.append(f"race={preset.get('name','?')}")
+        filter_summary = f"<i>Filtered by {', '.join(filter_parts)}</i><br>" if filter_parts else ""
         util.show_info_box("Skill Recommender", filter_summary + skill_recommender.format_html(result))
 
     def open_training_viewer(self):
