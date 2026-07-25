@@ -13,3 +13,10 @@ umalauncher/_assets/branch.txt
 umalauncher/_assets/build_date.txt
 umalauncher/_assets/commit_hash.txt
 umalauncher/_assets/remote_url.txt
+
+# Local data / generated artifacts (not for commit)
+master.mdb
+account_export/
+audit_chara_info.json
+tmp_presets.tsx
+*.bak-*
