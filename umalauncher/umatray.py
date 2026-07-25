@@ -194,10 +194,10 @@ class UmaTray():
 
         Requires a local Hakuraku dev server running (default Vite port 5173).
         """
-        hakuraku_port = self.threader.settings.get("hakuraku_port", 5173)
+        hakuraku_port = 5173
         race_url = f"http://127.0.0.1:3150/last-race"
         from urllib.parse import quote
-        target = f"http://localhost:{hakuraku_port}/race?fetchUrl={quote(race_url, safe='')}"
+        target = f"http://localhost:{hakuraku_port}/racedata?fetchUrl={quote(race_url, safe='')}"
         logger.info(f"Opening Hakuraku race view: {target}")
         webbrowser.open(target)
 
