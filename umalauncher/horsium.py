@@ -52,8 +52,18 @@ def firefox_setup(helper_url, settings):
 
     profile = webdriver.FirefoxProfile(persistent_profile_path)
     profile.set_preference("security.fileuri.strict_origin_policy", False) # Disable CORS protections
+    # Suppress the "<site> wants to access other apps and services" external
+    # protocol prompt that gametora can trigger; just let it through silently.
+    profile.set_preference("security.external_protocol_requires_permission", False)
     options = webdriver.FirefoxOptions()
     options.profile = profile
+    # In Selenium 4 a FirefoxProfile's set_preference() often doesn't reach the launched
+    # instance, so the external-protocol prefs above silently had no effect and gametora's
+    # "wants to access other apps and services" prompt kept spamming. Set them directly on
+    # Options (the path Selenium 4 actually applies), plus disable the external-app warning
+    # outright, to silence it for good.
+    options.set_preference("security.external_protocol_requires_permission", False)
+    options.set_preference("network.protocol-handler.warn-external-default", False)
 
     binary_path = None
 
