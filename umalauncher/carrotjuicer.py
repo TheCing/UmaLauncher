@@ -327,6 +327,11 @@ class CarrotJuicer:
             # Capture account data from home screen packet
             if isinstance(data, dict) and 'common_define' in data and 'user_info' in data:
                 account.capture_home_packet(data)
+            # Opportunistically merge archive fields from ANY packet that
+            # carries them — most (mission_list, story_*_data_list, etc.)
+            # only appear in specific screen packets, not the home packet.
+            if isinstance(data, dict):
+                account.merge_archive_fields(data)
 
             # Standalone race logging (Room Match, Champions Meet, etc.)
             # Room Match: race_horse_data_array + race_scenario at top level.

@@ -37,6 +37,17 @@ def capture_home_packet(data):
         'music_list': data.get('music_list', []),
         'champions_info': data.get('champions_info'),
         'honor_info': data.get('honor_info'),
+        # Archive sections
+        'mission_list': data.get('mission_list', []),
+        'main_story_data_list': data.get('main_story_data_list', []),
+        'character_story_data_list': data.get('character_story_data_list', []),
+        'extra_story_data_list': data.get('extra_story_data_list', []),
+        'home_story_data_array': data.get('home_story_data_array', []),
+        'released_episode_data_array': data.get('released_episode_data_array', []),
+        'short_episode_data_array': data.get('short_episode_data_array', []),
+        'talk_gallery_list': data.get('talk_gallery_list', []),
+        'home_poster_data_array': data.get('home_poster_data_array', []),
+        'tutorial_guide_data_array': data.get('tutorial_guide_data_array', []),
     }
     logger.info(f"Account data captured: {len(_account_data['support_card_list'])} support cards, "
                 f"{len(_account_data['card_list'])} character cards, "
@@ -47,6 +58,49 @@ def capture_home_packet(data):
 def get_account_data():
     """Return the raw captured account data, or None if not yet captured."""
     return _account_data
+
+
+# Archive fields that appear in screen-specific packets (Missions screen,
+# Story Archive, Music menu, etc.) rather than the home packet. We greedily
+# update each whenever a non-empty value shows up so the export reflects
+# the latest visited state.
+_ARCHIVE_OPPORTUNISTIC_FIELDS = (
+    'mission_list',
+    'main_story_data_list',
+    'character_story_data_list',
+    'extra_story_data_list',
+    'home_story_data_array',
+    'released_episode_data_array',
+    'short_episode_data_array',
+    'talk_gallery_list',
+    'home_poster_data_array',
+    'tutorial_guide_data_array',
+    'music_list',
+    'cloth_list',
+    'honor_info',
+)
+
+
+def merge_archive_fields(data):
+    """Update any archive fields present in `data` into the cached account.
+
+    Safe no-op if capture_home_packet hasn't initialised _account_data yet.
+    Only overwrites with non-empty values so a later mission-screen packet
+    doesn't get clobbered by an unrelated packet that happens to carry an
+    empty key.
+    """
+    if _account_data is None:
+        return
+    for key in _ARCHIVE_OPPORTUNISTIC_FIELDS:
+        if key not in data:
+            continue
+        val = data[key]
+        if val is None:
+            continue
+        # Skip empty lists/dicts so we don't downgrade a populated cache.
+        if isinstance(val, (list, dict)) and len(val) == 0:
+            continue
+        _account_data[key] = val
 
 
 def _resolve_support_card(card):
@@ -177,9 +231,27 @@ def export_account(output_dir=None):
         'characters': [_resolve_character(c) for c in _account_data['chara_list']],
         'raised_characters': [_resolve_trained_chara(tc) for tc in _account_data['trained_chara']],
         'support_decks': _account_data.get('support_card_deck_array', []),
-        'costumes_owned': len(_account_data.get('cloth_list', [])),
         'items': _account_data.get('item_list', []),
         'pieces': _account_data.get('piece_list', []),
+        'archive': {
+            'honors': _account_data.get('honor_info') or {},
+            'missions': _account_data.get('mission_list', []),
+            'music_tracks': _account_data.get('music_list', []),
+            'costumes': _account_data.get('cloth_list', []),
+            'stories': {
+                'main': _account_data.get('main_story_data_list', []),
+                'character': _account_data.get('character_story_data_list', []),
+                'extra': _account_data.get('extra_story_data_list', []),
+                'home': _account_data.get('home_story_data_array', []),
+            },
+            'episodes': {
+                'released': _account_data.get('released_episode_data_array', []),
+                'short': _account_data.get('short_episode_data_array', []),
+            },
+            'talk_gallery': _account_data.get('talk_gallery_list', []),
+            'home_posters': _account_data.get('home_poster_data_array', []),
+            'tutorial_guides': _account_data.get('tutorial_guide_data_array', []),
+        },
         'summary': {
             'support_cards': len(_account_data['support_card_list']),
             'character_cards': len(_account_data['card_list']),
@@ -187,6 +259,14 @@ def export_account(output_dir=None):
             'raised_characters': len(_account_data['trained_chara']),
             'costumes': len(_account_data.get('cloth_list', [])),
             'music_tracks': len(_account_data.get('music_list', [])),
+            'honors': len((_account_data.get('honor_info') or {}).get('honor_list', [])),
+            'missions': len(_account_data.get('mission_list', [])),
+            'main_stories_read': len(_account_data.get('main_story_data_list', [])),
+            'character_stories_read': len(_account_data.get('character_story_data_list', [])),
+            'extra_stories_read': len(_account_data.get('extra_story_data_list', [])),
+            'episodes_released': len(_account_data.get('released_episode_data_array', [])),
+            'episodes_short': len(_account_data.get('short_episode_data_array', [])),
+            'talk_gallery_entries': len(_account_data.get('talk_gallery_list', [])),
         },
     }
 
