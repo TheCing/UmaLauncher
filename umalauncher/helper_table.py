@@ -274,11 +274,18 @@ class HelperTable():
 
         # Ramen
         feeling_turn_info_array = []
+        special_feeling_num = 0
         if 'ramen_data_set' in data and 'feeling_reduce_turn_info_array' in data['ramen_data_set']:
             feeling_turn_info_array = data['ramen_data_set']['feeling_turn_info_array']
+            special_feeling_num = data['ramen_data_set']['special_feeling_num']
 
             for command in get_commands('ramen_data_set'):
                 all_commands[command['command_id']]['feeling_turn_array'] = next((x['feeling_turn_array'] for x in data['ramen_data_set']['feeling_reduce_turn_info_array'] if x['command_id'] == command['command_id'] ), [])
+
+        #TODO add row for ramen stuff
+        selected_region_id_array = []
+        if 'ramen_data_set_load' in data and 'selected_region_id_array' in data['ramen_data_set_load']:
+            selected_region_id_array = data['ramen_data_set_load']['selected_region_id_array']
 
         # Aoharu
         if 'team_data_set' in data:
@@ -874,7 +881,9 @@ class HelperTable():
             'rival_race_info_array': rival_race_info_array,
             'coin_num': coin_num,
             'sale_value': sale_value,
-            'feeling_turn_info_array': feeling_turn_info_array
+            'feeling_turn_info_array': feeling_turn_info_array,
+            'special_feeling_num': special_feeling_num,
+            'selected_region_id_array': selected_region_id_array
         }
 
         # Update preset if needed.

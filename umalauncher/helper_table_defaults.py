@@ -1524,7 +1524,7 @@ class RamenExpertiseRow(hte.Row):
         }
         img_name = feeling_id_to_name[feeling_id].lower()
         img_path = util.get_ramen_image_dict()[img_name]
-        img = f"<img src=\"{img_path}\" height=\"24\" width=\"24\" style=\"height:24px;width:auto;\" />"
+        img = f"<img src=\"{img_path}\" height=\"20\" width=\"20\" style=\"position:sticky;top:10%;height:20px;width:auto;\" />"
 
 
         cells = [hte.Cell(img, title=feeling_id_to_name.get(feeling_id, "Unknown"))]
