@@ -544,10 +544,30 @@ class GrandLiveTotalTokensRow(hte.Row):
 
 
 
+class GrandLiveTokensDistributionSettings(se.NewSettings):
+    _settings = {
+        "highlight_light_hello": se.Setting(
+            "Highlight SSR Light Hello",
+            "Highlights Token Gain Distribution on facilities where SSR Light Hello is present (only when she is in your support deck).",
+            True,
+            se.SettingType.BOOL
+        ),
+        "highlight_light_hello_color": se.Setting(
+            "Highlight SSR Light Hello color",
+            "The color to use to highlight facilities where SSR Light Hello is present.",
+            "#90EE90",
+            se.SettingType.COLOR
+        ),
+    }
+
 class GrandLiveTokensDistributionRow(hte.Row):
     long_name = "Grand Live tokens gained distribution"
     short_name = "Token Gain <br>Distribution"
     description = "[Scenario-specific] Shows the distribution of Grand Live tokens on each facility. Hidden in other scenarios."
+
+    def __init__(self):
+        super().__init__()
+        self.settings = GrandLiveTokensDistributionSettings()
 
     def _generate_cells(self, game_state) -> list[hte.Cell]:
         if list(game_state.values())[0]['scenario_id'] != 3:
@@ -568,7 +588,11 @@ class GrandLiveTokensDistributionRow(hte.Row):
 
             cell_text += "</div>"
 
-            cells.append(hte.Cell(cell_text))
+            # Bold highlight for training with SSR Light Hello
+            if self.settings.highlight_light_hello.value and command.get('has_ssr_light_hello'):
+                cells.append(hte.Cell(cell_text, bold=True, color=self.settings.highlight_light_hello_color.value))
+            else:
+                cells.append(hte.Cell(cell_text))
 
         return cells
     

@@ -384,6 +384,8 @@ class HelperTable():
             partner_count = 0
             useful_partner_count = 0
             riko_count = 0
+            # True only when SSR Light Hello (30052) from the support deck is on this facility.
+            has_ssr_light_hello = False
             num_hints = len(command.get('tips_event_partner_array', []))
             if num_hints:
                 hint_partners += command.get('tips_event_partner_array')
@@ -415,6 +417,11 @@ class HelperTable():
                     # Checking if Support card is Riko Kashimoto
                     if support_id == 30036 or support_id == 10060:
                         riko_count = 1
+
+                    # SSR Light Hello (Grand Live)
+                    if support_id == 30052:
+                        has_ssr_light_hello = True
+
                 elif training_partner_id > 1000:  # TODO: Maybe 1000 < training_partner_id < 9000
                     useful_partner_count += 1
 
@@ -633,7 +640,8 @@ class HelperTable():
                 'unity_near_explode_partner_count': unity_near_explode_partner_count,
                 'riko_count': riko_count,
                 'feeling_turn_array': feeling_turn_array,
-                'feeling_turn_info_array': feeling_turn_info_array
+                'feeling_turn_info_array': feeling_turn_info_array,
+                'has_ssr_light_hello': has_ssr_light_hello,
             }
 
         # Simplify everything down to a dict with only the keys we care about.
