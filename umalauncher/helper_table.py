@@ -1,4 +1,5 @@
 import copy
+import json
 import os
 
 from loguru import logger
@@ -6,6 +7,207 @@ import mdb
 import util
 import constants
 from helper_table_defaults import RowTypes
+
+# After-race events (Victory! / Solid Showing / Defeat). For these the first
+# choice is always the safe/no-risk pick and select_index 1|2 is the good roll.
+AFTER_RACE_EVENT_IDS = (7005, 7006, 7007)
+
+# Learned mapping: story_id -> choice_number -> "select_index:gain_select_id_index"
+# -> [condition effect ids]. Lets us predict a choice's outcome from the
+# pre-rolled packet (see tools/build_event_outcomes.py). Cached on first use.
+_EVENT_OUTCOMES = None
+
+
+def _get_event_outcomes():
+    global _EVENT_OUTCOMES
+    if _EVENT_OUTCOMES is None:
+        try:
+            with open(util.get_asset("_assets/event_outcomes.json"), encoding="utf-8") as f:
+                _EVENT_OUTCOMES = json.load(f)
+        except Exception:
+            logger.warning("event_outcomes.json not found — event predictions disabled.")
+            _EVENT_OUTCOMES = {}
+    return _EVENT_OUTCOMES
+
+
+# MANT (scenario 4) races that restock the shop when run (see
+# tools/build_shop_restock_races.py). Program ids, cached on first use.
+_SHOP_RESTOCK_RACES = None
+
+
+def _get_shop_restock_races():
+    global _SHOP_RESTOCK_RACES
+    if _SHOP_RESTOCK_RACES is None:
+        try:
+            with open(util.get_asset("_assets/shop_restock_races.json"), encoding="utf-8") as f:
+                _SHOP_RESTOCK_RACES = set(json.load(f).get("restock_program_ids", []))
+        except Exception:
+            _SHOP_RESTOCK_RACES = set()
+    return _SHOP_RESTOCK_RACES
+
+
+def _walk_dicts(node):
+    """Recursively yield every dict nested anywhere inside node."""
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk_dicts(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk_dicts(item)
+
+
+def _extract_events(data):
+    """Find the first unchecked_event_array (at any nesting depth) whose entries
+    carry a >=2-option choice, and return those entries.
+
+    The array can appear top-level (training events) or nested inside after-race,
+    shop-refresh, and scenario-specific packets — hence the recursive walk.
+    """
+    if not isinstance(data, dict):
+        return []
+    for obj in _walk_dicts(data):
+        unchecked = obj.get('unchecked_event_array')
+        if isinstance(unchecked, list) and unchecked:
+            filtered = []
+            for e in unchecked:
+                if not isinstance(e, dict):
+                    continue
+                contents = e.get('event_contents_info')
+                if not isinstance(contents, dict):
+                    continue
+                choices = contents.get('choice_array')
+                if isinstance(choices, list) and len(choices) >= 2:
+                    filtered.append(e)
+            if filtered:
+                return filtered
+    return []
+
+
+def build_event_choices(data):
+    """Parse pending career-event choices (found at any nesting depth) into a
+    readable list for the helper overlay. Each entry: {title, character,
+    choices:[{index, label, kind, select_index}]}. Empty when none pending.
+
+    Classification (ported from the older UmaLauncher event dump):
+      - After-race event: choice 0 = Safe; the good/bad select_index split is
+        scenario-specific (empirically verified against vital deltas):
+          MANT (4):      choice 2 rolls sel 1-4; 1/2 = good (-10), 3/4 = bad (-25)
+          Unity Cup (2): choice 2 rolls sel 1-2; 1 = good (-5), 2 = bad (-20)
+          URA (1):       sel is fixed (1,2) every play — outcome is NOT
+                         pre-rolled, so no prediction is possible.
+      - Other events: odd select_index = likely-good gamble; even = likely-bad.
+    """
+    events = _extract_events(data)
+    if not events:
+        return []
+
+    # card_id (for special-event title resolution) — find it anywhere in packet.
+    # scenario_id decides which after-race select_index encoding applies.
+    card_id = 0
+    scenario_id = 0
+    for obj in _walk_dicts(data):
+        ci = obj.get('chara_info')
+        if isinstance(ci, dict) and ci.get('card_id'):
+            card_id = ci['card_id']
+            scenario_id = ci.get('scenario_id', 0)
+            break
+
+    chara_names = mdb.get_chara_name_dict()
+    status_names = mdb.get_status_name_dict()
+    polarity = mdb.get_chara_effect_polarity_dict()
+    outcomes_tbl = _get_event_outcomes()
+
+    out = []
+    for event in events:
+        contents = event['event_contents_info']
+        choices = contents['choice_array']
+        story_id = event.get('story_id')
+        event_id = event.get('event_id')
+        chara_id = event.get('chara_id')
+        try:
+            title = mdb.get_event_titles(story_id, card_id)[0]
+        except Exception:
+            title = f"Event {story_id}"
+        character = chara_names.get(chara_id) if chara_id else None
+
+        story_tbl = outcomes_tbl.get(str(story_id), {})
+        is_race = event_id in AFTER_RACE_EVENT_IDS
+        event_has_condition = False
+        rows = []
+        for i, ch in enumerate(choices):
+            if not isinstance(ch, dict):
+                continue
+            si = ch.get('select_index')
+            gi = ch.get('gain_select_id_index')
+            predicted = False
+
+            if is_race:
+                # After-race events (Victory!/Solid Showing/Defeat) reward
+                # mood/energy, not conditions, so the condition table doesn't
+                # apply — choice 0 is the safe pick, and the pre-rolled
+                # select_index tells good/bad. The sel encoding differs per
+                # scenario (verified empirically against vital deltas).
+                if i == 0:
+                    label, kind = "Safe", "safe"
+                elif scenario_id == 1:
+                    # URA: select_index is fixed every play (no pre-roll) —
+                    # the outcome genuinely can't be predicted.
+                    label, kind = "Gamble (not pre-rolled)", "unknown"
+                elif scenario_id == 2:
+                    # Unity Cup/Aoharu: sel 1 = good roll, 2 = bad roll.
+                    if si == 1:
+                        label, kind = "Good", "good"
+                    else:
+                        label, kind = "Bad", "bad"
+                elif si in (1, 2):
+                    # MANT and default: sel 1/2 = good roll, 3/4 = bad roll.
+                    label, kind = "Good", "good"
+                else:
+                    label, kind = "Bad", "bad"
+            else:
+                # Prediction from the learned outcome table, keyed by this
+                # choice's own pre-rolled entry. `can_grant` = this choice yields
+                # a condition on at least one roll (a real gamble); `this_roll` is
+                # what THIS packet rolled (None = unseen, [] = seen, no condition).
+                choice_tbl = story_tbl.get(str(i + 1), {})
+                entry_key = f"{si}:{gi}"
+                can_grant = any(choice_tbl.get(k) for k in choice_tbl)
+                if can_grant:
+                    event_has_condition = True
+                this_roll = choice_tbl.get(entry_key)
+
+                if this_roll:
+                    # This roll grants a condition — the real, specific outcome.
+                    names = [status_names.get(e, f"#{e}") for e in this_roll]
+                    kind = "bad" if any(polarity.get(e) == "bad" for e in this_roll) else "good"
+                    label = " + ".join(names)
+                    predicted = True
+                elif this_roll == [] and can_grant:
+                    # Table-confirmed: this choice can grant a condition, but this
+                    # roll misses it (you'd lose the gamble).
+                    label, kind, predicted = "No condition (miss)", "miss", True
+                else:
+                    # No specific condition prediction — fall back to the
+                    # select_index hit/miss heuristic (odd = the good roll, even =
+                    # the bad roll), same as the original build.
+                    if si is not None and si % 2 == 1:
+                        label, kind = "Likely Good", "good"
+                    else:
+                        label, kind = "Likely Bad", "bad"
+
+            rows.append({'index': i, 'label': label, 'kind': kind,
+                         'select_index': si, 'predicted': predicted})
+
+        # Surface every choice event. Predictable ones show the condition /
+        # Safe-Good-Bad; the rest show "Outcome unknown" rather than being hidden
+        # (we don't have condition data for every event, and hiding them is worse
+        # than an honest "unknown"). `event_has_condition` is retained only for
+        # potential future use.
+        if rows:
+            out.append({'title': title, 'character': character,
+                        'story_id': story_id, 'event_id': event_id, 'choices': rows})
+    return out
 
 
 class TrainingPartner():
@@ -139,6 +341,21 @@ class HelperTable():
         self.preset_dict = {}
         self.selected_preset = None
         self.preset_dict, self.selected_preset = self.carrotjuicer.threader.settings.get_helper_table_data()
+        # race_history / race_result_list only appear in post-race packets,
+        # so cache the running tally and reuse it on home/training packets.
+        self.last_races_run = 0
+
+    def _update_races_run(self, data):
+        # Pull from whichever list the current packet happens to carry; fall
+        # back to cache when neither is present (most non-race packets).
+        for key in ('race_history', 'race_result_list'):
+            if data.get(key):
+                self.last_races_run = len(data[key])
+                return self.last_races_run
+        chara_info = data.get('chara_info') or {}
+        if chara_info.get('race_result_list'):
+            self.last_races_run = len(chara_info['race_result_list'])
+        return self.last_races_run
 
     def update_presets(self, preset_dict, selected_preset):
         self.preset_dict = preset_dict
@@ -821,6 +1038,12 @@ class HelperTable():
             "max_energy": max_energy,
             "fans": fans,
             "skillpt": skillpt,
+            "races_run": self._update_races_run(data),
+            # Persisted by carrotjuicer._process_packet_events so choices survive
+            # re-renders driven by packets that don't themselves carry the event.
+            "event_choices": getattr(self.carrotjuicer, 'pending_event_choices', []),
+            "event_choices_show_ids": self.carrotjuicer.threader.settings["event_choices_show_ids"],
+            "shop_restock_program_ids": _get_shop_restock_races(),
             "scheduled_races": scheduled_races,
             "gm_fragments": gm_fragments,
             "gl_stats": gl_stats,

@@ -385,6 +385,17 @@ def get_status_name_dict(force=False):
 
     return STATUS_NAME_DICT
 
+CHARA_EFFECT_POLARITY_DICT = {}
+def get_chara_effect_polarity_dict(force=False):
+    """single-mode condition id -> 'good' | 'bad' (effect_type 1 = positive)."""
+    global CHARA_EFFECT_POLARITY_DICT
+    if force or not CHARA_EFFECT_POLARITY_DICT:
+        with Connection() as (_, cursor):
+            cursor.execute("""SELECT id, effect_type FROM single_mode_chara_effect""")
+            rows = cursor.fetchall()
+        CHARA_EFFECT_POLARITY_DICT.update({row[0]: ('good' if row[1] == 1 else 'bad') for row in rows})
+    return CHARA_EFFECT_POLARITY_DICT
+
 OUTFIT_NAME_DICT = {}
 def get_outfit_name_dict(force=False):
     global OUTFIT_NAME_DICT

@@ -72,6 +72,11 @@ class CarrotJuicer:
     last_skills_rect = None
     skipped_msgpacks = []
 
+    # Pending career-event choices for the helper overlay (Safe/Good/Bad hints),
+    # persisted across re-renders. Set by _process_packet_events.
+    pending_event_choices = []
+    last_event_key = None
+
     sock: socket = None
     MAX_BUFFER_SIZE = 65535
 
@@ -655,6 +660,8 @@ class CarrotJuicer:
                         data = self.last_helper_data
                         self.update_helper_table(data)
 
+            self._process_packet_events(data)
+
             self.last_data = data
         except Exception:
             logger.error("ERROR IN HANDLING RESPONSE MSGPACK")
@@ -663,6 +670,47 @@ class CarrotJuicer:
             logger.error(exception_string)
             util.show_error_box("Uma Launcher: Error in response msgpack.", f"This should not happen. You may contact the developer about this issue.")
             # self.close_browser()
+
+    def _process_packet_events(self, data):
+        """Detect pending career-event choices anywhere in the packet (training,
+        after-race, shop-refresh, scenario) and keep the helper overlay's Event
+        Choices section in sync, re-rendering off the last training data so it
+        shows even when the event packet itself lacks full home/training info.
+        """
+        if not isinstance(data, dict):
+            return
+        # Cheap gate: event choices only ride on training/event packets. Skip the
+        # recursive packet scan on large non-training packets (login/inventory) so
+        # the socket-draining loop stays fast enough to avoid UDP drops. If a
+        # pending event is showing, still allow a chara_info packet through to
+        # clear it.
+        if 'unchecked_event_array' not in data and 'chara_info' not in data:
+            return
+        try:
+            choices = helper_table.build_event_choices(data)
+            if choices:
+                # Dedupe: the same pending event re-sends identical packets until
+                # resolved — avoid redundant browser re-renders.
+                key = tuple(
+                    (c['title'], tuple(ch['select_index'] for ch in c['choices']))
+                    for c in choices
+                )
+                if key == self.last_event_key:
+                    return
+                self.last_event_key = key
+                self.pending_event_choices = choices
+            else:
+                # Only clear when a real state packet (has chara_info) shows no
+                # pending event — i.e. the event resolved and we're back to normal.
+                if 'chara_info' not in data or not self.pending_event_choices:
+                    return
+                self.pending_event_choices = []
+                self.last_event_key = None
+
+            if self.browser and self.browser.alive() and self.last_helper_data:
+                self.update_helper_table(self.last_helper_data)
+        except Exception:
+            logger.error(f"Error processing packet events:\n{traceback.format_exc()}")
 
     def start_concert(self, music_id):
         logger.debug("Starting concert")

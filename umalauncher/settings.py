@@ -101,6 +101,12 @@ class DefaultSettings(se.NewSettings):
             False,
             se.SettingType.BOOL,
         ),
+        "event_choices_show_ids": se.Setting(
+            "Show event debug IDs",
+            "Append the story_id and event_id next to each event's title in the Event Choices overlay (applies to all scenarios).",
+            False,
+            se.SettingType.BOOL,
+        ),
         # "game_install_path = se.Setting(
         #     "Game install path",
         #     "Path to the game's installation folder. (Where DMM installed the game and umamusume.exe is located.)",

@@ -161,9 +161,21 @@ class PresetSettings(se.NewSettings):
             False,
             se.SettingType.BOOL,
         ),
+        "races_run_enabled": se.Setting(
+            "Show races run",
+            "Displays a running tally of races completed in the current career.",
+            True,
+            se.SettingType.BOOL,
+        ),
         "schedule_enabled": se.Setting(
             "Show schedule countdown",
             "Displays the amount of turns until your next scheduled race. (If there is one.)",
+            True,
+            se.SettingType.BOOL,
+        ),
+        "event_choices_enabled": se.Setting(
+            "Show event choices",
+            "When a career event pauses for a choice, shows each option with a Safe/Good/Bad hint.",
             True,
             se.SettingType.BOOL,
         ),
@@ -227,7 +239,13 @@ class Preset():
 
         if self.settings.fans_enabled.value:
             html_elements.append(self.generate_fans(main_info))
+
+        if self.settings.races_run_enabled.value:
+            html_elements.append(self.generate_races_run(main_info))
         
+        if getattr(self.settings, 'event_choices_enabled', None) and self.settings.event_choices_enabled.value:
+            html_elements.append(self.generate_event_choices(main_info))
+
         if self.settings.schedule_enabled.value:
             html_elements.append(self.generate_schedule(main_info))
         
@@ -306,6 +324,44 @@ class Preset():
 
     def generate_fans(self, main_info):
         return f"<div id=\"fans\"><b>Fans:</b> {main_info['fans']:,}</div>"
+
+    def generate_races_run(self, main_info):
+        return f"<div id=\"races-run\"><b>Races run:</b> {main_info['races_run']}</div>"
+
+    def generate_event_choices(self, main_info):
+        events = main_info.get('event_choices') or []
+        if not events:
+            return ""
+        kind_color = {"good": "#7bed9f", "safe": "#6bd5ff", "bad": "#ff6b6b",
+                      "miss": "#999999", "neutral": "#bbbbbb", "unknown": "#888888"}
+        blocks = []
+        for ev in events:
+            rows = ""
+            for c in ev['choices']:
+                color = kind_color.get(c['kind'], "#cccccc")
+                # A checkmark marks a verified prediction (from the outcome table)
+                # vs. a heuristic guess.
+                marker = "✓ " if c.get('predicted') else ""
+                rows += (
+                    f"<tr>"
+                    f"<td style=\"text-align:left;padding:1px 8px;white-space:nowrap;\">Choice {c['index'] + 1}</td>"
+                    f"<td style=\"text-align:left;padding:1px 8px;color:{color};font-weight:bold;white-space:nowrap;\">{marker}{c['label']}</td>"
+                    f"</tr>"
+                )
+            ids = ""
+            if main_info.get('event_choices_show_ids'):
+                ids = (f"<span style=\"color:#888;font-weight:normal;font-size:0.75rem;\">"
+                       f" story {ev.get('story_id')} · event {ev.get('event_id')}</span>")
+            blocks.append(
+                f"<div style=\"margin:0.15rem 0;\"><div style=\"font-weight:bold;\">{ev['title']}{ids}</div>"
+                f"<table style=\"margin:0 auto;\"><tbody>{rows}</tbody></table></div>"
+            )
+        return (
+            "<div id=\"event-choices\" style=\"display:flex;flex-direction:column;align-items:center;"
+            "border:1px solid #4A494B;border-radius:0.5rem;padding:0.3rem 0.5rem;margin:0.2rem 0;\">"
+            "<div style=\"color:#e94560;font-weight:bold;margin-bottom:0.15rem;\">Event Choices</div>"
+            f"{''.join(blocks)}</div>"
+        )
     
     def generate_table(self, command_info, main_info):
         if not command_info:
@@ -792,8 +848,9 @@ class Preset():
         races_div = ""
         mant_imgs = util.get_mant_image_dict()
 
-        races_div += "<div><table style=\"width:100%;white-space:nowrap;\"><thead><tr><th>Grade</th><th>Name</th><th>Surface/Dist</th><th>Rival</th></tr></thead><tbody>"
+        races_div += "<div><table style=\"width:100%;white-space:nowrap;\"><thead><tr><th>Grade</th><th>Name</th><th>Surface/Dist</th><th>Rival</th><th>Shop</th></tr></thead><tbody>"
         rival_program_ids = [race['program_id'] for race in main_info['rival_race_info_array']]
+        restock_ids = main_info.get('shop_restock_program_ids') or set()
         for race in main_info['races']:
             program_id = race['program_id']
             race_grade = mdb.get_program_id_grade(program_id)
@@ -825,6 +882,11 @@ class Preset():
                 races_div += f"<td><img src=\"{mant_imgs['rival']}\" width=\"24\" height=\"24\" style=\"vertical-align:middle;\"/></td>"
             else:
                 races_div += f"<td></td>"
+            # Flag races that restock the shop when run.
+            if program_id in restock_ids:
+                races_div += "<td style=\"color:#7bed9f;font-weight:bold;\">Refresh</td>"
+            else:
+                races_div += "<td></td>"
             races_div += "</tr>"
         races_div += "</tbody></table></div>"
 
