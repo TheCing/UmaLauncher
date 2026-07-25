@@ -16,6 +16,7 @@ import win32gui
 from loguru import logger
 from selenium.common.exceptions import WebDriverException
 from selenium import webdriver
+from selenium.webdriver.common.options import ArgOptions
 from selenium.webdriver.remote.webdriver import WebDriver as RemoteWebDriver
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.edge.service import Service as EdgeService
@@ -25,6 +26,11 @@ import util
 import socket
 
 OLD_DRIVERS = []
+
+def set_browser_version(options: ArgOptions, settings):
+    if not settings['browser_version'] or not settings['browser_version'].strip():
+        return
+    options.browser_version = settings['browser_version']
 
 def _is_port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.15) -> bool:
     try:
@@ -56,6 +62,7 @@ def firefox_setup(helper_url, settings):
     # protocol prompt that gametora can trigger; just let it through silently.
     profile.set_preference("security.external_protocol_requires_permission", False)
     options = webdriver.FirefoxOptions()
+    set_browser_version(options, settings)
     options.profile = profile
     # In Selenium 4 a FirefoxProfile's set_preference() often doesn't reach the launched
     # instance, so the external-protocol prefs above silently had no effect and gametora's
@@ -82,6 +89,7 @@ def firefox_setup(helper_url, settings):
 def chromium_setup(service, options_class, driver_class, profile, helper_url, settings, binary_path=None, base_port=9222, max_port=9229):
     service.creation_flags = CREATE_NO_WINDOW
     options = options_class()
+    set_browser_version(options, settings)
 
     if binary_path:
         options.binary_location = binary_path
