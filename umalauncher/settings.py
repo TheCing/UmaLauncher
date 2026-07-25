@@ -347,8 +347,8 @@ class DefaultSettings(se.NewSettings):
         _settings.update({
             "carrotblender_port": se.Setting(
                 "CarrotBlender Port",
-                "Port to listen on for CarrotBlender.",
-                17229,
+                "Port to listen on for CarrotBlender. Default 17230 to avoid a clash with Heaven's uma_bridge (which sends to 17229). CarrotBlender's config.properties 'port' must match.",
+                17230,
                 se.SettingType.INT,
                 max_value=65535
             ),
@@ -361,11 +361,11 @@ class DefaultSettings(se.NewSettings):
             ),
             "carrotblender_max_buffer_size": se.Setting(
                 "CarrotBlender Max Buffer Size",
-                "Buffer size for CarrotBlender (in bytes). Don't change this unless you really know what you're doing.",
-                262144, # TODO this is completely arbitrary
+                "UDP receive buffer for CarrotBlender (in bytes). Larger values absorb the login burst of large (decompressed) responses without dropping datagrams.",
+                4194304, # 4MB — headroom for the login flood of decompressed responses
                 se.SettingType.INT,
                 hidden=True,
-                max_value=1048576 # 1MB
+                max_value=16777216 # 16MB
             )
         })
         _settings.get("enable_carrotjuicer").name = "Enable CarrotBlender"

@@ -37,6 +37,17 @@ def unpack(data: bytes, key: bytes, iv: bytes) -> bytes:
     return unpacker.unpack()
 
 
+def unpack_decrypted(data: bytes):
+    """Unpack a response that CarrotBlender already decrypted (msg types 6/7/8).
+
+    The plaintext has the same shape as the AES path in unpack(): a 4-byte
+    length header followed by the msgpack body. No key/IV needed.
+    """
+    b = io.BytesIO(data[4:])
+    unpacker = Unpacker(file_like=b)
+    return unpacker.unpack()
+
+
 class CarrotJuicer:
     browser: horsium.BrowserWindow = None
     previous_element = None
@@ -96,9 +107,24 @@ class CarrotJuicer:
 
     def load_request(self, msg_path, is_json=False):
         if is_json:
-            # First 4 bytes are a header
+            # The request payload (after a 4-byte header) is one or more msgpack
+            # objects; newer game builds prefix/append extras (an int, trailing
+            # bytes) around the actual request map. Scan for the first dict.
             try:
-                unpacked = msgpack.unpackb(msg_path[4:])
+                unpacked = None
+                unpacker = Unpacker(io.BytesIO(msg_path[4:]), strict_map_key=False)
+                try:
+                    for obj in unpacker:
+                        if isinstance(obj, dict):
+                            unpacked = obj
+                            break
+                except Exception:
+                    pass  # trailing garbage after the dict — fine if we found it
+                if unpacked is None:
+                    # Newer builds send requests as base64(AES(msgpack)+key); we
+                    # can't parse those without decrypting, so just skip quietly.
+                    logger.debug(f"No request dict found; payload hex={msg_path[:48].hex()}")
+                    return None
                 for key in constants.REQUEST_KEYS_TO_BE_REMOVED:
                     if key in unpacked:
                         del unpacked[key]
@@ -275,8 +301,15 @@ class CarrotJuicer:
             data = message
         else:
             data = self.load_response(message)
-        
+
         if not data:
+            return
+
+        # A well-formed response is always a msgpack map. Garbage on the
+        # (vestigial) encrypted path can decode to a bare int/list — skip it
+        # quietly instead of falling into the error handler and popping a box.
+        if not isinstance(data, dict):
+            logger.debug(f"Ignoring non-dict response payload: {type(data).__name__}")
             return
 
         if self.threader.settings["save_packets"]:
@@ -869,6 +902,8 @@ class CarrotJuicer:
                                         f"Could not bind to {ip_address}:{port}")
 
             chunks_left = 0
+            decrypted_chunks_left = 0
+            decrypted_data = b''
             while not self.should_stop:
 
                 msg_path = None
@@ -946,7 +981,7 @@ class CarrotJuicer:
                         continue
                     msg_type = message[0]
                     msg_len = 0
-                    if msg_type != 4:
+                    if msg_type not in (4, 7):
                         msg_len = message[1] * 256 + message[2]
                         if len(message) < msg_len:
                             logger.error( f"Invalid message (incomplete): {message.hex()}")
@@ -975,16 +1010,21 @@ class CarrotJuicer:
                                 self.iv = None
                                 self.encrypted_data = None
                             except Exception as e:
-                                logger.error(f"Error decoding and handling message: {e}")
-                                logger.error(traceback.format_exc())
+                                # Usually a dropped multipart chunk left the
+                                # ciphertext truncated — recoverable, next
+                                # response is fine. Keep it quiet.
+                                logger.warning(f"Discarding undecodable response (likely a dropped chunk under load): {e}")
                                 self.key = None
                                 self.iv = None
                                 self.encrypted_data = None
                         else:
-                            logger.warning( f"Ignoring message: data, key and/or IV is not set!")
+                            # Expected on builds where CarrotBlender captures the
+                            # decrypted response directly (msg types 6/7/8): the
+                            # game still emits key+IV per response, but no encrypted
+                            # ciphertext (type 0) to pair with them. Harmless.
+                            logger.debug( f"Ignoring message: data, key and/or IV is not set (decrypted-response mode)." )
                     elif msg_type == 3: # Request (unencrypted msgpack)
                         logger.debug(f"Processing request: {message.hex()}")
-                        logger.debug(f"Unpacked request: {msgpack.unpackb(message[4:])}")
                         self.handle_request( message, is_json=True)
                     elif msg_type == 4: # Data (multipart header)
                         chunks_left = message[1]
@@ -992,11 +1032,40 @@ class CarrotJuicer:
                         logger.debug(f"Got multipart response header with {chunks_left} chunks")
                     elif msg_type == 5: # Data (multipart chunk)
                         if chunks_left < 1:
-                            logger.error( "Got unexpected multipart message chunk!")
+                            # A datagram (the header or an earlier chunk) was
+                            # dropped under load — this response can't be
+                            # reassembled. Drop it quietly and wait for the next.
+                            logger.debug("Discarding orphaned multipart chunk (dropped datagram under load).")
+                            self.encrypted_data = b''
                             continue
                         chunks_left -= 1
                         logger.debug(f"Got chunk of size {msg_len}: {message.hex()}")
                         self.encrypted_data += message
+                    elif msg_type == 6: # Decrypted response (full)
+                        logger.debug(f"Processing decrypted response: {len(message)} bytes")
+                        try:
+                            self.handle_response(unpack_decrypted(message), is_json=True)
+                        except Exception as e:
+                            logger.error(f"Error handling decrypted response: {e}")
+                            logger.error(traceback.format_exc())
+                    elif msg_type == 7: # Decrypted response (multipart header)
+                        decrypted_chunks_left = message[1]
+                        decrypted_data = b''
+                        logger.debug(f"Got decrypted multipart header with {decrypted_chunks_left} chunks")
+                    elif msg_type == 8: # Decrypted response (multipart chunk)
+                        if decrypted_chunks_left < 1:
+                            logger.error("Got unexpected decrypted multipart chunk!")
+                            continue
+                        decrypted_chunks_left -= 1
+                        decrypted_data += message
+                        if decrypted_chunks_left == 0:
+                            logger.debug(f"Reassembled decrypted response: {len(decrypted_data)} bytes")
+                            try:
+                                self.handle_response(unpack_decrypted(decrypted_data), is_json=True)
+                            except Exception as e:
+                                logger.error(f"Error handling decrypted response: {e}")
+                                logger.error(traceback.format_exc())
+                            decrypted_data = b''
                     else:
                         logger.error( f"Invalid message (invalid type): {message.hex()}")
                         continue
