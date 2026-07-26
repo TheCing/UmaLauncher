@@ -5,18 +5,51 @@ The lookup is what makes the Archive tab in training_viewer.html able to
 say "unlocked X / Y" — without a universe of all possible IDs it could
 only show what the account JSON already lists.
 
+Reads the live game database (the same one the launcher uses) so the lookup
+can't be built from a stale copy. Override with --db or UL_MDB_PATH.
+
 Run this whenever Global master data changes:
     uv run python tools/build_archive_lookups.py
 """
+import argparse
 import json
 import os
 import re
 import sqlite3
 import sys
+from datetime import datetime
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-MDB = os.path.join(ROOT, "master.mdb")
 VIEWER = os.path.join(ROOT, "training_viewer.html")
+
+# Live game master.mdb locations, mirroring umalauncher/mdb.py get_db_path().
+# Global first — the Archive lookup is built from Global master data.
+MDB_CANDIDATES = (
+    r"%userprofile%\AppData\LocalLow\Cygames\Umamusume\master\master.mdb",
+    r"%userprofile%\AppData\LocalLow\Cygames\umamusume\master\master.mdb",
+    r"%userprofile%\AppData\LocalLow\Cygames\UmamusumePrettyDerby_Jpn\master\master.mdb",
+)
+
+
+def resolve_mdb(explicit=None):
+    """Locate the live master.mdb. Explicit path / UL_MDB_PATH win if set."""
+    override = explicit or os.environ.get("UL_MDB_PATH")
+    if override:
+        path = os.path.abspath(os.path.expandvars(override))
+        if not os.path.exists(path):
+            sys.exit(f"master.mdb not found at {path}")
+        return path
+
+    for candidate in MDB_CANDIDATES:
+        path = os.path.expandvars(candidate)
+        if os.path.exists(path):
+            return path
+
+    sys.exit(
+        "Could not find the game's master.mdb in any known location:\n  "
+        + "\n  ".join(os.path.expandvars(c) for c in MDB_CANDIDATES)
+        + "\nPass --db /path/to/master.mdb or set UL_MDB_PATH."
+    )
 
 START = "// __ARCHIVE_UNIVERSE_START__"
 END = "// __ARCHIVE_UNIVERSE_END__"
@@ -144,10 +177,17 @@ def inject(universe):
 
 
 def main():
-    if not os.path.exists(MDB):
-        print(f"master.mdb not found at {MDB}", file=sys.stderr)
-        sys.exit(1)
-    c = sqlite3.connect(MDB)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", help="Path to master.mdb (defaults to the live game database)")
+    args = parser.parse_args()
+
+    mdb_path = resolve_mdb(args.db)
+    mtime = os.path.getmtime(mdb_path)
+    print(f"Using {mdb_path}")
+    print(f"  (last modified {datetime.fromtimestamp(mtime):%Y-%m-%d %H:%M})")
+
+    # Read-only so a running game can't be disturbed.
+    c = sqlite3.connect(f"file:{mdb_path}?mode=ro", uri=True)
     universe = build(c)
     for k, v in universe.items():
         print(f"  {k:20s} {len(v):5d}")
