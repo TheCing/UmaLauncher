@@ -343,10 +343,18 @@ class Preset():
                 # A checkmark marks a verified prediction (from the outcome table)
                 # vs. a heuristic guess.
                 marker = "✓ " if c.get('predicted') else ""
+                # The pre-rolled select_index is what the Safe/Good/Bad call is
+                # derived from, so show it alongside the value. It can be absent
+                # on malformed choices, in which case just omit it.
+                select_index = c.get('select_index')
+                sel = ""
+                if select_index is not None:
+                    sel = (f"<span style=\"color:#888;font-weight:normal;\">"
+                           f" [sel {select_index}]</span>")
                 rows += (
                     f"<tr>"
                     f"<td style=\"text-align:left;padding:1px 8px;white-space:nowrap;\">Choice {c['index'] + 1}</td>"
-                    f"<td style=\"text-align:left;padding:1px 8px;color:{color};font-weight:bold;white-space:nowrap;\">{marker}{c['label']}</td>"
+                    f"<td style=\"text-align:left;padding:1px 8px;color:{color};font-weight:bold;white-space:nowrap;\">{marker}{c['label']}{sel}</td>"
                     f"</tr>"
                 )
             ids = ""
