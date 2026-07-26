@@ -1022,6 +1022,11 @@ class CarrotJuicer:
                             # TODO: is there a better way to do this than busy waiting?
                             continue
                     except Exception as e:
+                        if self.should_stop:
+                            # Expected during shutdown: stop() closes the socket
+                            # out from under the blocked select/recv. Not an error.
+                            logger.debug(f"Socket closed during shutdown: {e}")
+                            continue
                         #TODO: kill the socket in a "good" way that doesn't throw an exception here
                         logger.error(f"Socket interrupted: {e}\n{traceback.format_exc()}")
                         continue
