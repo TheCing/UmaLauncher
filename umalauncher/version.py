@@ -12,7 +12,7 @@ import util
 import gui
 import glob
 
-VERSION = "1.18.6"
+VERSION = "1.18.6-mod1"
 
 # Fallback if no remote_url.txt was recorded at build time.
 DEFAULT_RELEASE_REPO = "TheCing/UmaLauncher"
