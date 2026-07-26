@@ -251,6 +251,14 @@ class DefaultSettings(se.NewSettings):
             se.SettingType.STRING,
             tab="Event Helper"
         ),
+        "bond_exclude_director": se.Setting(
+            "Exclude Director from bond counts",
+            "Don't count Director Akikawa's bond towards the total or useful bond shown for each training."
+            "<br>She appears in URA Finals, Grand Live and Make a New Track. Her bond only counts as useful in Grand Live.",
+            False,
+            se.SettingType.BOOL,
+            tab="Event Helper"
+        ),
         "training_helper_table_preset": se.Setting(
             "Training helper table preset",
             "Preset to use for the Automatic Training Event Helper.",

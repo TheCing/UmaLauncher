@@ -386,6 +386,7 @@ class HelperTable():
         turn = data['chara_info']['turn']
         scenario_id = data['chara_info']['scenario_id']
         energy = data['chara_info']['vital']
+        exclude_director = self.carrotjuicer.threader.settings['bond_exclude_director']
         max_energy = data['chara_info']['max_vital']
         fans = data['chara_info']['fans']
         skillpt = data['chara_info']['skill_point']
@@ -654,8 +655,13 @@ class HelperTable():
                     tip_gains_total.append(training_partner.hint_bond)
                     tip_gains_useful.append(training_partner.hint_useful_bond)
 
-                bond_gains_total.append(training_partner.bond)
-                bond_gains_useful.append(training_partner.useful_bond)
+                # Optionally leave Director Akikawa (partner 102) out of both bond
+                # counts. Her useful bond is only non-zero in Grand Live (see
+                # calc_useful_bond); elsewhere dropping it is a no-op. She still
+                # counts as a partner on the facility.
+                if not (exclude_director and training_partner_id == 102):
+                    bond_gains_total.append(training_partner.bond)
+                    bond_gains_useful.append(training_partner.useful_bond)
 
             unity_partner_count = 0
             useful_unity_partner_count = 0
