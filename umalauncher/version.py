@@ -144,6 +144,20 @@ def upgrade(umasettings, raw_settings):
         if os.path.exists(patcher_exe):
             os.remove(patcher_exe)
 
+    if settings_version < (1, 18, 6, 2):
+        # 1.18.6-mod1 changed these defaults, but an existing umasettings.json
+        # always overrides a default, so upgrading users kept the old values
+        # (port 17229 clashes with Heaven's uma_bridge; the 256KB buffer drops
+        # datagrams during the login burst). Migrate, but only when the value is
+        # still the old default so a deliberate choice isn't overwritten.
+        # Note: these settings only exist on the Global build.
+        if "carrotblender_port" in umasettings and umasettings["carrotblender_port"] == 17229:
+            logger.info("Migrating carrotblender_port 17229 -> 17230")
+            umasettings["carrotblender_port"] = 17230
+        if "carrotblender_max_buffer_size" in umasettings and umasettings["carrotblender_max_buffer_size"] == 262144:
+            logger.info("Migrating carrotblender_max_buffer_size 262144 -> 4194304")
+            umasettings["carrotblender_max_buffer_size"] = 4194304
+
     # If upgraded at all
     if script_version > settings_version:
         umasettings['skip_update'] = None
