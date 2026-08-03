@@ -97,13 +97,6 @@ class CarrotJuicer:
 
         self.helper_table = helper_table.HelperTable(self)
 
-        # Remove existing geckodriver.log
-        if os.path.exists("geckodriver.log"):
-            try:
-                os.remove("geckodriver.log")
-            except PermissionError:
-                logger.warning("Could not delete geckodriver.log because it is already in use!")
-                return
 
 
     def restart_time(self):
@@ -218,7 +211,9 @@ class CarrotJuicer:
 
     def close_browser(self):
         if self.browser and self.browser.alive():
-            self.browser.close()
+            # quit() (not close()) so the driver process is disposed too -
+            # close() alone left geckodriver/chromedriver running until app exit.
+            self.browser.quit()
             self.save_last_browser_rect()
             self.browser = None
         return
@@ -252,7 +247,7 @@ class CarrotJuicer:
         if self.training_tracker:
             self.training_tracker = None
         if self.skill_browser and self.skill_browser.alive():
-            self.skill_browser.close()
+            self.skill_browser.quit()
         self.close_browser()
         return
     

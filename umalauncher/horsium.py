@@ -8,7 +8,6 @@ import json
 import os
 import shutil
 import traceback
-import time
 import threading
 from urllib.parse import urlparse
 from subprocess import CREATE_NO_WINDOW
@@ -27,7 +26,8 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.common.exceptions import NoSuchWindowException
 import util
 
-OLD_DRIVERS = []
+# Threads currently quitting replaced/hung drivers; joined at shutdown.
+_PENDING_QUIT_THREADS = []
 
 # Prefs that kill the "<site> wants to open this application" external-protocol
 # prompt. gametora occasionally triggers it and there is nothing we ever want
@@ -88,7 +88,9 @@ def firefox_setup(helper_url, settings):
         if new_path:
             driver_path = new_path
 
-    firefox_service = FirefoxService(executable_path=driver_path)
+    # Keep geckodriver's log out of the CWD (the install dir for the exe).
+    firefox_service = FirefoxService(executable_path=driver_path,
+                                     log_output=util.get_appdata("geckodriver.log"))
     firefox_service.creation_flags = CREATE_NO_WINDOW
 
     # Profile used IN PLACE via geckodriver's -profile argument. The
@@ -220,7 +222,11 @@ class BrowserWindow:
         self.run_at_launch = run_at_launch
         self.browser_name = "Auto"
         self.latest_error = ""
-        
+        # WebDriver sessions are not thread-safe, and this window is driven from
+        # both the CarrotJuicer thread and the Flask (umaserver) thread. RLock
+        # because locked methods call each other (ensure_focus -> ensure_tab_open).
+        self._driver_lock = threading.RLock()
+
         self.ensure_tab_open()
 
     def init_browser(self) -> RemoteWebDriver:
@@ -260,69 +266,78 @@ class BrowserWindow:
                 self.latest_error = traceback.format_exception_only(type(e), e)[-1]
         # if not driver:
         #     util.show_warning_box("Uma Launcher: Unable to start browser.", "Selected webbrowser cannot be started.")
+
+        if driver:
+            # A hung page or script must raise instead of blocking the calling
+            # thread forever (packet handling runs through this class).
+            try:
+                driver.set_page_load_timeout(30)
+                driver.set_script_timeout(20)
+            except WebDriverException:
+                logger.warning(f"Could not set driver timeouts:\n{traceback.format_exc()}")
         return driver
 
     def alive(self):
-        if self.driver is None:
-            return False
-        try:
-            if self.active_tab_handle in self.driver.window_handles:
-                return True
-        except:
-            pass
-        return False
+        with self._driver_lock:
+            if self.driver is None:
+                return False
+            try:
+                return self.active_tab_handle in self.driver.window_handles
+            except WebDriverException:
+                return False
 
+    def _reuse_existing_tab(self):
+        """Try to keep using the current session. Returns True when the tab is
+        usable and showing the right page; raises WebDriverException when the
+        session is unusable and must be replaced."""
+        if self.active_tab_handle not in self.driver.window_handles:
+            raise WebDriverException("Active tab is gone")
+
+        if self.driver.current_window_handle != self.active_tab_handle:
+            if self.browser_name == 'Firefox':
+                self.driver.switch_to.window(self.active_tab_handle)
+            else:
+                # App-mode Chrome/Edge can't reliably switch back; relaunch.
+                raise WebDriverException("Active tab is no longer the current window")
+
+        if urls_match(self.driver.current_url, self.url):
+            if self.driver.execute_script("return window.from_script;"):
+                self.last_window_rect = self.driver.get_window_rect()
+                return True
+
+        # Wrong page: navigate. get() blocks until the load finishes or the
+        # page-load timeout raises - no marker-polling needed.
+        self.driver.get(self.url)
+        self.run_script_at_launch()
+        return True
 
     def ensure_tab_open(self):
-        if self.driver:
-            # Check if we have window handles
-            try:
-                window_handles = self.driver.window_handles
+        with self._driver_lock:
+            if self.driver:
                 try:
-                    if self.active_tab_handle in window_handles:
-                        if self.browser_name in ['Chrome', 'Edge']:
-                            if self.driver.current_window_handle != self.active_tab_handle:
-                                raise Exception("Wrong window handle")
-
-                        if self.browser_name == 'Firefox' and self.driver.current_window_handle != self.active_tab_handle:
-                            self.driver.switch_to.window(self.active_tab_handle)
-
-                        if urls_match(self.driver.current_url, self.url):
-                            from_script = self.driver.execute_script("return window.from_script;")
-                            if from_script:
-                                self.last_window_rect = self.driver.get_window_rect()
-                                return
-                        
-                        self.driver.execute_script(f"document.still_the_old_page_haha = true;")  # Really reflects my mental state when I made this code
-                        self.driver.execute_script(f"window.location = '{self.url}';")
-                        # Wait for the page to load
-                        while self.driver.execute_script("return document.still_the_old_page_haha;"):
-                            time.sleep(0.2)
-                        while self.driver.execute_script("return document.readyState;") != "complete":
-                            time.sleep(0.2)
-                        self.run_script_at_launch()
+                    if self._reuse_existing_tab():
                         return
-                except:
-                    self.driver.quit()
+                except WebDriverException:
+                    logger.warning(f"Browser session unusable, replacing it:\n{traceback.format_exc()}")
+                    # Quit off-thread: a dead session's quit() can block on the
+                    # wire, and this path runs inside packet handling.
+                    _quit_driver_async(self.driver)
                     self.driver = None
+
+            self.driver = self.init_browser()
+
+            try:
+                if not self.driver or not self.driver.window_handles:
+                    return
             except WebDriverException:
-                pass
-            OLD_DRIVERS.append(self.driver)
-
-        self.driver = self.init_browser()
-
-        try:
-            if not self.driver or not self.driver.window_handles:
+                logger.error("Failed to get window handles")
+                logger.error(traceback.format_exc())
                 return
-        except WebDriverException as e:
-            logger.error("Failed to get window handles")
-            logger.error(traceback.format_exc())
-            return
 
-        self.active_tab_handle = self.driver.window_handles[0]
-        self.driver.switch_to.window(self.active_tab_handle)
-        self.run_script_at_launch()
-        self.last_window_rect = self.driver.get_window_rect()
+            self.active_tab_handle = self.driver.window_handles[0]
+            self.driver.switch_to.window(self.active_tab_handle)
+            self.run_script_at_launch()
+            self.last_window_rect = self.driver.get_window_rect()
 
     def run_script_at_launch(self):
         self.driver.execute_script("""window.from_script = true;""")
@@ -337,47 +352,36 @@ class BrowserWindow:
 
     def ensure_focus(func):
         def wrapper(self, *args, **kwargs):
-            tries = 0
+            with self._driver_lock:
+                tries = 0
 
-            while tries < 3:
-                tries += 1
-                self.ensure_tab_open()
-                if self.driver:
-                    return func(self, *args, **kwargs)
+                while tries < 3:
+                    tries += 1
+                    self.ensure_tab_open()
+                    if self.driver:
+                        return func(self, *args, **kwargs)
 
             util.show_warning_box("Uma Launcher: Unable to reach browser.", f"Webbrowser is unable to open.<br><br>If this problem persists, try restarting your computer<br>or selecting a different browser in the preferences.<br><br>Extra info:<br>{self.latest_error}")
         return wrapper
 
     def get_browser_pid(self):
-        if self.driver is not None and 'moz:processID' in self.driver.capabilities:
-            return self.driver.capabilities['moz:processID']
-        else:
-            browsers = ['chrome.exe', 'msedge.exe', 'chromium.exe']
-            if self.settings['enable_browser_override'] and self.settings['browser_custom_binary']:
-                browsers.append( os.path.basename(self.settings['browser_custom_binary'])  )
-            # Chromium-based (chrome/edge) browsers should be launched with the --app= flag.
-            # The app flag isn't passed to custom browser binaries, so we check for that later
-            for process in psutil.process_iter():
-                try:
-                    if process.name() in browsers:
-                        if f'--app={self.url}' in process.cmdline():
-                            return process.pid
-                except Exception as e:
-                    logger.warning( "Error getting browser PID:" )
-                    logger.warning(traceback.format_exc())
-            # If we didn't find a process with the --app= flag (likely a custom browser binary), try to find it by looking for the webdriver flag
-            for process in psutil.process_iter():
-                try:
-                    if (process.name() in browsers
-                        and '--test-type=webdriver' in process.cmdline()
-                        and process.parent().name() not in browsers):
-                        # Look for the top-level browser process only (it's what has the window)
-                        return process.pid
-                except Exception as e:
-                    logger.warning( "Error getting browser PID:" )
-                    logger.warning(traceback.format_exc())
-            logger.warning("Could not get browser PID!")
+        if self.driver is None:
             return None
+        # Firefox reports its PID directly.
+        if 'moz:processID' in self.driver.capabilities:
+            return self.driver.capabilities['moz:processID']
+        # Chromium: the browser is the driver service's direct child - no need
+        # to scan the system process table.
+        try:
+            service_process = self.driver.service.process
+            if service_process:
+                children = psutil.Process(service_process.pid).children()
+                if children:
+                    return children[0].pid
+        except (psutil.Error, AttributeError):
+            logger.warning(f"Error getting browser PID from driver service:\n{traceback.format_exc()}")
+        logger.warning("Could not get browser PID!")
+        return None
 
     # TODO: It'd be nice to be able to do this without resorting to the win32 API
     def set_topmost(self, is_topmost):
@@ -416,18 +420,20 @@ class BrowserWindow:
 
     def close(self):
         # Only close the active tab
-        try:
-            if self.driver is not None and self.active_tab_handle in self.driver.window_handles:
-                self.driver.switch_to.window(self.active_tab_handle)
-                self.last_window_rect = self.driver.get_window_rect()
-                self.driver.close()
-        except (NoSuchWindowException, WebDriverException):
-            pass
+        with self._driver_lock:
+            try:
+                if self.driver is not None and self.active_tab_handle in self.driver.window_handles:
+                    self.driver.switch_to.window(self.active_tab_handle)
+                    self.last_window_rect = self.driver.get_window_rect()
+                    self.driver.close()
+            except (NoSuchWindowException, WebDriverException):
+                pass
 
     def quit(self):
-        self.close()
-        OLD_DRIVERS.append(self.driver)
-        self.driver = None
+        with self._driver_lock:
+            self.close()
+            _quit_driver_async(self.driver)
+            self.driver = None
 
 
 def quit_one_driver(driver):
@@ -439,19 +445,24 @@ def quit_one_driver(driver):
             pass
     logger.debug(f"Finished closing driver in thread {threading.get_ident()}")
 
+def _quit_driver_async(driver):
+    """Quit a driver on a background thread, immediately.
+
+    Replaced/hung sessions used to accumulate in a global list that was only
+    drained at shutdown, leaving dead browser + driver processes running for
+    the whole app session. Quitting can block on the wire, so it happens
+    off-thread; threads are tracked so shutdown can join them.
+    """
+    if not driver:
+        return
+    quit_thread = threading.Thread(target=quit_one_driver, args=(driver,), daemon=True)
+    _PENDING_QUIT_THREADS.append(quit_thread)
+    quit_thread.start()
+
 def quit_all_drivers():
-    global OLD_DRIVERS
-
-    quit_threads = []
-    for driver in OLD_DRIVERS:
-        quit_threads.append(threading.Thread(target=quit_one_driver, args=(driver,)))
-
-    for thread in quit_threads:
-        thread.start()
-
-    for thread in quit_threads:
-        thread.join()
-
-    OLD_DRIVERS = []
+    """Wait for any in-flight driver quits (bounded) at shutdown."""
+    for quit_thread in _PENDING_QUIT_THREADS:
+        quit_thread.join(timeout=10)
+    _PENDING_QUIT_THREADS.clear()
 
 # Chromium Webdriver is a poopyhead
