@@ -253,12 +253,56 @@ BROWSER_LIST = {
 }
 
 def urls_match(url1, url2):
+    """Whether two URLs point at the same page: netloc + path only.
+
+    Query string and fragment are IGNORED on purpose. The helper URL's query
+    encodes the deck (card/scenario/support ids) and changes every career, so
+    exact matching would treat every new career as a different page and force
+    a full reload instead of reusing the open tab.
+    """
     url1 = url1[:-1] if url1.endswith('/') else url1
     url2 = url2[:-1] if url2.endswith('/') else url2
     urlparse1 = urlparse(url1)
     urlparse2 = urlparse(url2)
     return (urlparse1.netloc, urlparse1.path) == (urlparse2.netloc, urlparse2.path)
 
+
+def ensure_focus(func):
+    """Decorator for BrowserWindow methods that need a live, focused tab.
+
+    Retries ensure_tab_open (which relaunches the browser if needed) up to 3
+    times before running the wrapped method. If the browser still isn't up,
+    reports the outage once - as a tray notification when the tray is
+    available, falling back to the old modal warning box.
+    """
+    def wrapper(self, *args, **kwargs):
+        with self._driver_lock:
+            tries = 0
+
+            while tries < 3:
+                tries += 1
+                self.ensure_tab_open()
+                if self.driver:
+                    return func(self, *args, **kwargs)
+
+            # Report once per outage, not once per call - this runs off
+            # packet handling, so it used to stack modal boxes forever.
+            already_reported = self._reported_launch_failure
+            self._reported_launch_failure = True
+
+        if already_reported:
+            return
+
+        error_line = self.latest_error.strip() or "no error recorded"
+        tray = getattr(self.threader, "tray", None)
+        if tray and tray.notify(
+                f"The helper browser could not be opened ({error_line}). "
+                "Try selecting a different browser in the preferences.",
+                "Uma Launcher: Unable to reach browser"):
+            return
+        # No tray (or toast failed): fall back to the modal box.
+        util.show_warning_box("Uma Launcher: Unable to reach browser.", f"Webbrowser is unable to open.<br><br>If this problem persists, try restarting your computer<br>or selecting a different browser in the preferences.<br><br>Extra info:<br>{self.latest_error}")
+    return wrapper
 
 
 class BrowserWindow:
@@ -415,26 +459,6 @@ class BrowserWindow:
         # only want to do this for the training-event-helper
         if 'training-event-helper' in self.url:
             self.set_topmost(self.settings["browser_topmost"])
-
-    def ensure_focus(func):
-        def wrapper(self, *args, **kwargs):
-            with self._driver_lock:
-                tries = 0
-
-                while tries < 3:
-                    tries += 1
-                    self.ensure_tab_open()
-                    if self.driver:
-                        return func(self, *args, **kwargs)
-
-                # Report once per outage, not once per call - this runs off
-                # packet handling, so it used to stack modal boxes forever.
-                already_reported = self._reported_launch_failure
-                self._reported_launch_failure = True
-
-            if not already_reported:
-                util.show_warning_box("Uma Launcher: Unable to reach browser.", f"Webbrowser is unable to open.<br><br>If this problem persists, try restarting your computer<br>or selecting a different browser in the preferences.<br><br>Extra info:<br>{self.latest_error}")
-        return wrapper
 
     def get_browser_pid(self):
         if self.driver is None:

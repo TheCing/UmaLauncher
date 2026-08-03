@@ -1,5 +1,6 @@
 import os
 import shutil
+import traceback
 import webbrowser
 
 import pystray
@@ -56,6 +57,17 @@ class UmaTray():
 
     def set_title(self, title):
         self.icon_thread.title = title
+
+    def notify(self, message, title=None):
+        """Show a Windows toast from the tray icon. Returns False if the tray
+        isn't up (or the backend refuses), so callers can fall back."""
+        try:
+            if self.icon_thread and self.icon_thread.visible:
+                self.icon_thread.notify(message, title)
+                return True
+        except Exception:
+            logger.warning(f"Tray notification failed:\n{traceback.format_exc()}")
+        return False
 
     def reset_title(self):
         self.icon_thread.title = self.default_title

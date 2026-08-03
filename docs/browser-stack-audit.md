@@ -4,10 +4,11 @@
 geckodriver docs, Chrome DevTools blog, and Bugzilla. Line refs are to the code
 as of commit `14adccd`.*
 
-**Status (end of 2026-08-03 session):** A1-A4, B1-B6, C1-C3 done; C4 closed as
-moot (the browser-override UI only offers Firefox / "Other (Chromium)", which
-routes to chrome_setup - edge_setup is unreachable with overrides). C5-C7
-remain open, C7 partially addressed (failure box now fires once per outage).
+**Status (end of 2026-08-03 session):** A1-A4, B1-B6, C1-C3, C5-C7 done; C4
+closed as moot (the browser-override UI only offers Firefox / "Other
+(Chromium)", which routes to chrome_setup - edge_setup is unreachable with
+overrides). C7: browser-unreachable is now a tray toast (once per outage),
+with the modal box kept as fallback when the tray is unavailable.
 Additional fixes landed beyond the audit's scope: Firefox Local Network Access
 prompt suppression (the real cause of the permission popup), launch-failure
 backoff, chromedriver/edgedriver log capture, Chrome --do-not-de-elevate (the
