@@ -340,6 +340,12 @@ class Preset():
         return f"<div id=\"races-run\"><b>Races run:</b> {main_info['races_run']}</div>"
 
     def generate_average_training_value(self, main_info):
+        # Only meaningful while bonds are still being built; once Classic
+        # starts the counter stops being actionable, so it hides itself.
+        # Tracking continues underneath either way.
+        if main_info.get('turn', 0) >= constants.CLASSIC_YEAR_START_TURN:
+            return ""
+
         average = main_info.get('average_training_value')
         if average is None:
             # No training run yet this career - nothing to average.

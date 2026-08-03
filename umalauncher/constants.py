@@ -231,6 +231,10 @@ GRAND_LIVE_SCENARIO_ID = 3
 # green above it, orange below it.
 TRAINING_VALUE_TARGET_LOW = 2.4
 TRAINING_VALUE_TARGET_HIGH = 2.6
+# First turn of Classic year (see DEFAULT_TRAINING_SECTIONS - the same in every
+# scenario's section table). Bonds are largely settled by then, so the
+# average-training-value counter hides itself from here on.
+CLASSIC_YEAR_START_TURN = 25
 
 UAF_COLOR_DICT = {
     "1": "rgba(0, 0, 255, 0.1)",
