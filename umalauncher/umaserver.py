@@ -20,6 +20,10 @@ def _add_cors(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    # Chromium Private Network Access: public-site -> loopback fetches may send
+    # a preflight expecting this header as enforcement rolls out. Harmless for
+    # browsers that don't ask.
+    response.headers['Access-Control-Allow-Private-Network'] = 'true'
     return response
 
 

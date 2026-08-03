@@ -4,6 +4,18 @@
 geckodriver docs, Chrome DevTools blog, and Bugzilla. Line refs are to the code
 as of commit `14adccd`.*
 
+**Status (end of 2026-08-03 session):** A1-A4, B1-B6, C1-C3 done; C4 closed as
+moot (the browser-override UI only offers Firefox / "Other (Chromium)", which
+routes to chrome_setup - edge_setup is unreachable with overrides). C5-C7
+remain open, C7 partially addressed (failure box now fires once per outage).
+Additional fixes landed beyond the audit's scope: Firefox Local Network Access
+prompt suppression (the real cause of the permission popup), launch-failure
+backoff, chromedriver/edgedriver log capture, Chrome --do-not-de-elevate (the
+launcher self-elevates and Chrome otherwise de-elevates out from under the
+driver), and tools/browser_smoke.py for launcher-free testing. Still open:
+scoping the launcher's blanket self-elevation so the browser doesn't inherit
+admin.
+
 ## Verdict
 
 **Modernize in place; do not replace Selenium.** Playwright was evaluated and

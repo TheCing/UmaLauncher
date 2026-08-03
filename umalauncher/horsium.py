@@ -36,8 +36,10 @@ _PENDING_QUIT_THREADS = []
 MAX_CONSECUTIVE_LAUNCH_FAILURES = 3
 LAUNCH_FAILURE_COOLDOWN_SECONDS = 120
 
+# Note: no CORS relaxation needed - umaserver sends Access-Control-Allow-Origin
+# on every response, which is why Firefox (which has no CORS kill-switch for
+# https pages) always worked.
 FIREFOX_FORCED_PREFS = {
-    "security.fileuri.strict_origin_policy": False,  # Disable CORS protections
     # Firefox 150+ gates requests aimed at loopback/local addresses behind a
     # Local Network Access permission prompt ("<site> wants to access other apps
     # and services on this device", permission type loopback-network). The
@@ -170,7 +172,10 @@ def chromium_setup(service, options_class, driver_class, profile, helper_url, se
 
     options.add_argument(f"--user-data-dir={per_window_profile}")
     options.add_experimental_option("excludeSwitches", ["enable-automation"]) # Disable browser being controlled warning
-    options.add_argument("--disable-web-security") # Disable CORS protections
+    # No --disable-web-security: the only cross-origin traffic is helper page ->
+    # umaserver, and umaserver sends CORS headers on every response. An
+    # (elevated) browser session on a third-party site should not run with web
+    # security disabled.
     # The launcher always runs elevated (util.elevate), and Chrome launched
     # elevated auto-de-elevates: it relaunches itself unelevated and the
     # original process exits, so chromedriver reports "Chrome instance exited"
