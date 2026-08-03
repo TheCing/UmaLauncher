@@ -87,6 +87,10 @@ def main():
                         help="Override the browser from settings")
     parser.add_argument("--hold", type=int, default=0,
                         help="Seconds to keep the window open before quitting")
+    parser.add_argument("--window", action="store_true",
+                        help="Go through the real BrowserWindow layer (applies the saved "
+                             "browser_position rect) instead of the bare setup function. "
+                             "Gametora page setup (dark mode, overlay) still needs the launcher.")
     args = parser.parse_args()
 
     elevated = bool(ctypes.windll.shell32.IsUserAnAdmin())
@@ -96,6 +100,16 @@ def main():
     browser_name = args.browser or selected_browser_name(settings)
     if browser_name == "Auto":
         browser_name = "Firefox"
+
+    if args.browser:
+        # BrowserWindow picks the browser from settings; honor the override.
+        settings["selected_browser"] = {n: (n == browser_name)
+                                        for n in ("Auto", "Chrome", "Firefox", "Edge")}
+        settings["enable_browser_override"] = False
+
+    if args.window:
+        return run_window_mode(settings, browser_name, args.hold)
+
     setup = horsium.BROWSER_LIST[browser_name]
     print(f"browser:  {browser_name}  ->  {setup.__name__}")
     print(f"url:      {HELPER_URL}\n")
@@ -119,6 +133,43 @@ def main():
     finally:
         driver.quit()
     return 0
+
+
+class _FakeThreader:
+    """Just enough threader for BrowserWindow: it only reads .settings."""
+    def __init__(self, settings):
+        self.settings = settings
+
+
+def run_window_mode(settings, browser_name, hold):
+    rect = settings.get("browser_position") or [100, 100, 600, 900]
+    print(f"browser:  {browser_name} (via BrowserWindow)")
+    print(f"rect:     {rect}  (from browser_position setting)")
+    print(f"url:      {HELPER_URL}\n")
+
+    start = time.time()
+    bw = horsium.BrowserWindow(HELPER_URL, _FakeThreader(settings), rect=rect)
+    try:
+        if not bw.alive():
+            print(f"WINDOW FAILED after {time.time() - start:.1f}s "
+                  f"(latest error: {bw.latest_error.strip() or 'none recorded'})")
+            tail_driver_log(bw.browser_name, start)
+            return 1
+        applied = bw.get_window_rect()
+        print(f"WINDOW OK in {time.time() - start:.1f}s  (browser: {bw.browser_name})")
+        print(f"  requested rect: x={rect[0]} y={rect[1]} w={rect[2]} h={rect[3]}")
+        print(f"  applied rect:   x={applied['x']} y={applied['y']} "
+              f"w={applied['width']} h={applied['height']}")
+        matches = (abs(applied['x'] - rect[0]) <= 16 and abs(applied['y'] - rect[1]) <= 16
+                   and abs(applied['width'] - rect[2]) <= 16 and abs(applied['height'] - rect[3]) <= 16)
+        print(f"  rect applied:   {'YES' if matches else 'NO (off by more than 16px)'}")
+        if hold:
+            print(f"  holding window open {hold}s...")
+            time.sleep(hold)
+        return 0 if matches else 1
+    finally:
+        bw.quit()
+        horsium.quit_all_drivers()
 
 
 if __name__ == "__main__":
