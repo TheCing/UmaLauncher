@@ -29,17 +29,30 @@ import util
 # Threads currently quitting replaced/hung drivers; joined at shutdown.
 _PENDING_QUIT_THREADS = []
 
-# Prefs that kill the "<site> wants to open this application" external-protocol
-# prompt. gametora occasionally triggers it and there is nothing we ever want
-# launched from the helper window, so refuse the hand-off outright rather than
-# asking. external-default is deliberately scheme-agnostic: we don't know which
-# protocol the page will try, and per-scheme prefs would only cover known ones.
 FIREFOX_FORCED_PREFS = {
     "security.fileuri.strict_origin_policy": False,  # Disable CORS protections
-    "security.external_protocol_requires_permission": False,
-    "network.protocol-handler.external-default": False,
-    "network.protocol-handler.warn-external-default": False,
+    # Firefox 150+ gates requests aimed at loopback/local addresses behind a
+    # Local Network Access permission prompt ("<site> wants to access other apps
+    # and services on this device", permission type loopback-network). The
+    # helper page fetches our own server on 127.0.0.1, so it trips on every
+    # fresh profile. 1 = ALLOW_ACTION, which makes the prompt auto-resolve.
+    "permissions.default.loopback-network": 1,
 }
+
+
+def firefox_prefs_for(helper_url):
+    """Forced prefs for a window pointed at `helper_url`.
+
+    network.lna.skip-domains is checked twice against different hosts - once
+    against the requesting site and once against the address being connected to
+    - so both sides have to be listed for the Local Network Access check to be
+    skipped outright.
+    """
+    prefs = dict(FIREFOX_FORCED_PREFS)
+    helper_host = urlparse(helper_url).hostname
+    domains = [d for d in (helper_host, "127.0.0.1", "localhost") if d]
+    prefs["network.lna.skip-domains"] = ",".join(dict.fromkeys(domains))
+    return prefs
 
 
 def write_profile_user_js(profile_path, prefs):
@@ -111,7 +124,8 @@ def firefox_setup(helper_url, settings):
     # Re-applied every launch so profiles created by older versions pick up
     # prefs added later; user_prefs the browser saves land in prefs.js and are
     # unaffected.
-    write_profile_user_js(profile_dir, FIREFOX_FORCED_PREFS)
+    forced_prefs = firefox_prefs_for(helper_url)
+    write_profile_user_js(profile_dir, forced_prefs)
 
     options = webdriver.FirefoxOptions()
     set_browser_version(options, settings)
@@ -119,8 +133,8 @@ def firefox_setup(helper_url, settings):
     options.add_argument(profile_dir)
     # Also pass the forced prefs through Options: geckodriver applies these to
     # whatever profile it uses, so either path alone suffices and a change in
-    # profile handling can't silently bring the protocol prompt back.
-    for pref_key, pref_value in FIREFOX_FORCED_PREFS.items():
+    # profile handling can't silently bring the prompt back.
+    for pref_key, pref_value in forced_prefs.items():
         options.set_preference(pref_key, pref_value)
 
     binary_path = None
