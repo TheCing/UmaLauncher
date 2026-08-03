@@ -171,6 +171,13 @@ def chromium_setup(service, options_class, driver_class, profile, helper_url, se
     options.add_argument(f"--user-data-dir={per_window_profile}")
     options.add_experimental_option("excludeSwitches", ["enable-automation"]) # Disable browser being controlled warning
     options.add_argument("--disable-web-security") # Disable CORS protections
+    # The launcher always runs elevated (util.elevate), and Chrome launched
+    # elevated auto-de-elevates: it relaunches itself unelevated and the
+    # original process exits, so chromedriver reports "Chrome instance exited"
+    # while an orphaned, driverless window opens anyway. Every retry then
+    # spawns another orphan. This switch tells Chrome to stay in the process
+    # chromedriver spawned; it is a no-op when not elevated.
+    options.add_argument("--do-not-de-elevate")
 
     if not settings['enable_browser_override']:
         options.add_argument("--app=" + helper_url)
