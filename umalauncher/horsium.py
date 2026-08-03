@@ -6,6 +6,7 @@
 import hashlib
 import json
 import os
+import shutil
 import traceback
 import time
 import threading
@@ -66,6 +67,20 @@ def set_browser_version(options: ArgOptions, settings):
         return
     options.browser_version = settings['browser_version']
 
+
+def window_profile_dir(base_profile_path, url):
+    """Per-window profile directory for `url`.
+
+    A running browser instance holds an exclusive lock on its profile, and the
+    helper and skills windows can run concurrently, so each window needs its own
+    directory. Key on netloc+path only: the helper URL's query string encodes
+    the deck and changes every career, and hashing it would spawn a fresh
+    profile per run.
+    """
+    parsed_url = urlparse(url)
+    url_slug = hashlib.md5(f"{parsed_url.netloc}{parsed_url.path}".encode("utf-8")).hexdigest()[:8]
+    return f"{base_profile_path}_{url_slug}"
+
 def firefox_setup(helper_url, settings):
     driver_path = None
     if settings['enable_browser_override']:
@@ -76,27 +91,33 @@ def firefox_setup(helper_url, settings):
     firefox_service = FirefoxService(executable_path=driver_path)
     firefox_service.creation_flags = CREATE_NO_WINDOW
 
-    # Use a persistent profile in appdata so extensions/settings survive restarts.
-    # Seed from the bundled ff_profile on first run.
-    persistent_profile_path = util.get_appdata("ff_profile")
-    if not os.path.exists(persistent_profile_path):
-        import shutil
-        shutil.copytree(util.get_asset("ff_profile"), persistent_profile_path)
+    # Profile used IN PLACE via geckodriver's -profile argument. The
+    # options.profile path clones the directory twice (copytree + base64-zip
+    # extract), so Firefox only ever wrote to a throwaway copy and nothing -
+    # cookies, site settings, "remember my choice" - survived a session. The
+    # CLI argument is the one mechanism geckodriver documents as in-place.
+    # Needs geckodriver >= 0.31.0 (Marionette port handling with custom
+    # profiles); Selenium Manager fetches a current one automatically.
+    base_profile = util.get_appdata("ff_profile")
+    profile_dir = window_profile_dir(base_profile, helper_url)
+    if not os.path.exists(profile_dir):
+        # Seed from the legacy shared dir if present (keeps userChrome.css and
+        # any manual tweaks), else from the bundled asset.
+        seed = base_profile if os.path.exists(base_profile) else util.get_asset("ff_profile")
+        shutil.copytree(seed, profile_dir)
 
-    # Selenium clones this directory to a temp dir on every launch and Firefox
-    # only ever touches the clone, so nothing the browser writes survives the
-    # session - including the "Remember my choice" that would normally stop a
-    # protocol prompt from reappearing. Baking the prefs into user.js first means
-    # the clone carries them, and they are re-applied on every single start.
-    write_profile_user_js(persistent_profile_path, FIREFOX_FORCED_PREFS)
+    # Re-applied every launch so profiles created by older versions pick up
+    # prefs added later; user_prefs the browser saves land in prefs.js and are
+    # unaffected.
+    write_profile_user_js(profile_dir, FIREFOX_FORCED_PREFS)
 
-    profile = webdriver.FirefoxProfile(persistent_profile_path)
     options = webdriver.FirefoxOptions()
     set_browser_version(options, settings)
-    options.profile = profile
-    # Also pass them through Options, which geckodriver applies independently of
-    # the profile. Either path alone should be enough; both together means a
-    # change in Selenium's profile handling can't silently bring the prompt back.
+    options.add_argument("-profile")
+    options.add_argument(profile_dir)
+    # Also pass the forced prefs through Options: geckodriver applies these to
+    # whatever profile it uses, so either path alone suffices and a change in
+    # profile handling can't silently bring the protocol prompt back.
     for pref_key, pref_value in FIREFOX_FORCED_PREFS.items():
         options.set_preference(pref_key, pref_value)
 
@@ -122,14 +143,7 @@ def chromium_setup(service, options_class, driver_class, profile, helper_url, se
     if binary_path:
         options.binary_location = binary_path
 
-    # A user-data-dir can only be held by one running Chromium instance, and the
-    # helper and skills windows are separate instances that may run at once, so
-    # give each window its own dir keyed on its URL. Key on netloc+path only:
-    # the helper URL's query string encodes the deck and changes every career,
-    # and hashing it would spawn a fresh profile per run.
-    parsed_url = urlparse(helper_url)
-    url_slug = hashlib.md5(f"{parsed_url.netloc}{parsed_url.path}".encode("utf-8")).hexdigest()[:8]
-    per_window_profile = f"{profile}_{url_slug}"
+    per_window_profile = window_profile_dir(profile, helper_url)
 
     options.add_argument(f"--user-data-dir={per_window_profile}")
     options.add_experimental_option("excludeSwitches", ["enable-automation"]) # Disable browser being controlled warning
