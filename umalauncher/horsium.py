@@ -183,13 +183,30 @@ def chromium_setup(service, options_class, driver_class, profile, helper_url, se
     logger.debug(f"Chromium started using profile {per_window_profile}")
     return browser
 
+def chromium_service_kwargs(log_name, driver_path=None):
+    """Service kwargs that capture why a Chromium browser failed to start.
+
+    "Chrome instance exited" from the driver carries no reason; the driver's own
+    verbose log has it (bad flag, profile lock, sandbox failure). Log to appdata
+    the way geckodriver does, always verbose - it is a few KB per launch and it
+    is the only record of a startup failure.
+    """
+    kwargs = {
+        "log_output": util.get_appdata(log_name),
+        "service_args": ["--verbose"],
+    }
+    if driver_path:
+        kwargs["executable_path"] = driver_path
+    return kwargs
+
+
 def chrome_setup(helper_url, settings):
     driver_path = None
     if settings['enable_browser_override']:
         new_path = settings['browser_custom_driver']
         if new_path:
             driver_path = new_path
-    
+
     binary_path = None
     if settings['enable_browser_override']:
         binary_path = settings['browser_custom_binary']
@@ -198,7 +215,7 @@ def chrome_setup(helper_url, settings):
     logger.debug(f"Chrome binary path: {binary_path}")
 
     return chromium_setup(
-        service=ChromeService(executable_path=driver_path) if driver_path else ChromeService(),
+        service=ChromeService(**chromium_service_kwargs("chromedriver.log", driver_path)),
         options_class=webdriver.ChromeOptions,
         driver_class=webdriver.Chrome,
         profile=util.get_appdata("chr_profile"),
@@ -209,7 +226,7 @@ def chrome_setup(helper_url, settings):
 
 def edge_setup(helper_url, settings):
     return chromium_setup(
-        service=EdgeService(),
+        service=EdgeService(**chromium_service_kwargs("edgedriver.log")),
         options_class=webdriver.EdgeOptions,
         driver_class=webdriver.Edge,
         profile=util.get_appdata("edg_profile"),
