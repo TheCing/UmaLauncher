@@ -157,8 +157,36 @@ def firefox_setup(helper_url, settings):
     logger.debug(f"Firefox binary path: {binary_path}")
     
     browser = webdriver.Firefox(service=firefox_service, options=options)
+    _apply_firefox_adblock(browser, settings)
     browser.get(helper_url)
     return browser
+
+
+UBLOCK_ADDON_ID = "uBlock0@raymondhill.net"
+
+
+def _apply_firefox_adblock(browser, settings):
+    """Install or remove the bundled uBlock Origin per the adblock setting.
+
+    The profile is persistent and used in place, so an install survives
+    restarts (installing again is a cheap upgrade/no-op) and disabling the
+    setting has to actively uninstall. Never fatal: the helper works fine
+    without it.
+    """
+    try:
+        if settings['adblock_enabled']:
+            xpi = util.get_asset("_assets/adblock/ublock_origin.xpi")
+            if os.path.exists(xpi):
+                browser.install_addon(xpi, temporary=False)
+            else:
+                logger.warning(f"Adblock enabled but bundled xpi missing: {xpi}")
+        else:
+            try:
+                browser.uninstall_addon(UBLOCK_ADDON_ID)
+            except WebDriverException:
+                pass  # not installed - nothing to remove
+    except Exception:
+        logger.warning(f"Could not apply adblock setting:\n{traceback.format_exc()}")
 
 def chromium_setup(service, options_class, driver_class, profile, helper_url, settings, binary_path=None):
     service.creation_flags = CREATE_NO_WINDOW

@@ -41,6 +41,7 @@ SETTINGS_DEFAULTS = {
     "browser_custom_binary": "",
     "browser_custom_driver": "",
     "browser_version": None,
+    "adblock_enabled": True,
     "selected_browser": {"Auto": True, "Chrome": False, "Firefox": False, "Edge": False},
 }
 

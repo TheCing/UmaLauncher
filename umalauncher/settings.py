@@ -251,6 +251,14 @@ class DefaultSettings(se.NewSettings):
             se.SettingType.STRING,
             tab="Event Helper"
         ),
+        "adblock_enabled": se.Setting(
+            "Ad blocking (Firefox only)",
+            "Install the bundled uBlock Origin into the helper browser's Firefox profile."
+            "<br>Chrome and Edge no longer allow sideloading extensions, so this has no effect there.",
+            True,
+            se.SettingType.BOOL,
+            tab="Event Helper"
+        ),
         "bond_exclude_director": se.Setting(
             "Exclude Director from bond counts",
             "Don't count Director Akikawa's bond towards the total or useful bond shown for each training."
