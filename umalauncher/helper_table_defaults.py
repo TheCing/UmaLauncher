@@ -617,6 +617,44 @@ class RainbowCountRow(hte.Row):
         return cells
 
 
+class TrainingValueSettings(se.NewSettings):
+    _settings = {
+        "highlight_max": se.Setting(
+            "Highlight max value",
+            "Highlights the facility with the highest training value.",
+            True,
+            se.SettingType.BOOL
+        ),
+    }
+
+
+class TrainingValueRow(hte.Row):
+    long_name = "Training value"
+    short_name = "Value"
+    description = ("Rates each facility: 1 point per partner whose bond is still below 80,\n"
+                   "0.5 per hint, and 0.5 if Light Hello is on it (Grand Live only).")
+
+    def __init__(self):
+        super().__init__()
+        self.settings = TrainingValueSettings()
+
+    def _generate_cells(self, game_state) -> list[hte.Cell]:
+        cells = [hte.Cell(self.short_name, title=self.description)]
+
+        values = [command['training_value'] for command in game_state.values()]
+        max_value = max(values) if values else 0
+
+        for value in values:
+            # Whole numbers as "2", halves as "2.5".
+            text = f"{value:g}"
+            cells.append(hte.Cell(
+                text,
+                bold=self.settings.highlight_max.value and value == max_value and value > 0
+            ))
+
+        return cells
+
+
 class PartnerCountSettings(se.NewSettings):
     _settings = {
         "highlight_max": se.Setting(
@@ -1620,6 +1658,7 @@ class RowTypes(Enum):
     USEFUL_PARTNER_COUNT = UsefulPartnerCountRow
     SKILL_HINT_COUNT = HintCountRow
     RAINBOW_COUNT = RainbowCountRow
+    TRAINING_VALUE = TrainingValueRow
     AOHARU_USEFUL_UNITY_PARTNER_COUNT = UsefulUnityTrainingCountRow
     AOHARU_UNITY_PARTNER_COUNT = UnityTrainingCountRow
     AOHARU_UNITY_SCORE = UnityScoreRow

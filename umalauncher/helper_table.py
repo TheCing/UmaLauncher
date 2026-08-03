@@ -344,6 +344,42 @@ class HelperTable():
         # race_history / race_result_list only appear in post-race packets,
         # so cache the running tally and reuse it on home/training packets.
         self.last_races_run = 0
+        # Training Value of each facility on the board we last showed, plus the
+        # values of the trainings actually chosen so far this career.
+        self.offered_training_values = {}
+        self.offered_values_turn = None
+        self.chosen_training_values = {}
+
+    def record_training_choice(self, command_id):
+        """Record that the player ran `command_id` on the board we last showed.
+
+        Called from carrotjuicer when a training request goes out. Keyed by the
+        turn the board belonged to, so repeated requests for the same turn (or
+        a re-render in between) can't double-count.
+        """
+        if self.offered_values_turn is None:
+            return
+        value = self.offered_training_values.get(command_id)
+        if value is None:
+            return  # not a training command (rest, race, infirmary, ...)
+        self.chosen_training_values[self.offered_values_turn] = value
+
+    def _average_training_value(self):
+        if not self.chosen_training_values:
+            return None
+        values = self.chosen_training_values.values()
+        return sum(values) / len(values)
+
+    def _update_offered_training_values(self, turn, command_info):
+        # A new career restarts the turn counter; drop the old run's history.
+        if self.offered_values_turn is not None and turn < self.offered_values_turn:
+            self.chosen_training_values = {}
+        self.offered_values_turn = turn
+        self.offered_training_values = {
+            command['command_id']: command['training_value']
+            for command in command_info.values()
+            if 'training_value' in command and 'command_id' in command
+        }
 
     def _update_races_run(self, data):
         # Pull from whichever list the current packet happens to carry; fall
@@ -609,6 +645,7 @@ class HelperTable():
             partner_count = 0
             useful_partner_count = 0
             riko_count = 0
+            sub_orange_bond_count = 0
             # True only when SSR Light Hello (30052) from the support deck is on this facility.
             has_ssr_light_hello = False
             num_hints = len(command.get('tips_event_partner_array', []))
@@ -662,6 +699,11 @@ class HelperTable():
                 if not (exclude_director and training_partner_id == 102):
                     bond_gains_total.append(training_partner.bond)
                     bond_gains_useful.append(training_partner.useful_bond)
+
+                # Training Value: partners still below the orange band are the
+                # ones this training can still earn bond from.
+                if training_partner.starting_bond < constants.BOND_ORANGE_CUTOFF:
+                    sub_orange_bond_count += 1
 
             unity_partner_count = 0
             useful_unity_partner_count = 0
@@ -840,6 +882,13 @@ class HelperTable():
             if "ramen_data_set" in data:
                 feeling_turn_array = command.get("feeling_turn_array", [])
 
+            # Training Value: one point per partner still below the orange bond
+            # band, half a point per hint, and half a point when Light Hello
+            # lands here (Grand Live only - the card does nothing elsewhere).
+            training_value = float(sub_orange_bond_count) + (constants.HINT_TRAINING_VALUE * num_hints)
+            if has_ssr_light_hello and scenario_id == constants.GRAND_LIVE_SCENARIO_ID:
+                training_value += constants.LIGHT_HELLO_TRAINING_VALUE
+
             command_info[command['command_id']] = {
                 'scenario_id': scenario_id,
                 'current_stats': current_stats,
@@ -872,6 +921,8 @@ class HelperTable():
                 'feeling_turn_array': feeling_turn_array,
                 'feeling_turn_info_array': feeling_turn_info_array,
                 'has_ssr_light_hello': has_ssr_light_hello,
+                'training_value': training_value,
+                'command_id': command['command_id'],
             }
 
         # Simplify everything down to a dict with only the keys we care about.
@@ -881,6 +932,10 @@ class HelperTable():
             for command_id in command_info
             if command_id in constants.COMMAND_ID_TO_KEY
         }
+
+        # Remember what this turn's board offered, so the training the player
+        # picks next can be scored against it.
+        self._update_offered_training_values(turn, command_info)
 
 
         # Process scheduled races
@@ -1075,6 +1130,7 @@ class HelperTable():
             "fans": fans,
             "skillpt": skillpt,
             "races_run": self._update_races_run(data),
+            "average_training_value": self._average_training_value(),
             # Persisted by carrotjuicer._process_packet_events so choices survive
             # re-renders driven by packets that don't themselves carry the event.
             "event_choices": getattr(self.carrotjuicer, 'pending_event_choices', []),

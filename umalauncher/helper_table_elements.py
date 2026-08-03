@@ -167,6 +167,13 @@ class PresetSettings(se.NewSettings):
             True,
             se.SettingType.BOOL,
         ),
+        "average_training_value_enabled": se.Setting(
+            "Show average training value",
+            "Displays the average Training Value of the trainings you have run this career."
+            "<br>White around 2.5, green above, orange below.",
+            True,
+            se.SettingType.BOOL,
+        ),
         "schedule_enabled": se.Setting(
             "Show schedule countdown",
             "Displays the amount of turns until your next scheduled race. (If there is one.)",
@@ -242,6 +249,9 @@ class Preset():
 
         if self.settings.races_run_enabled.value:
             html_elements.append(self.generate_races_run(main_info))
+
+        if getattr(self.settings, 'average_training_value_enabled', None) and self.settings.average_training_value_enabled.value:
+            html_elements.append(self.generate_average_training_value(main_info))
         
         if getattr(self.settings, 'event_choices_enabled', None) and self.settings.event_choices_enabled.value:
             html_elements.append(self.generate_event_choices(main_info))
@@ -328,6 +338,20 @@ class Preset():
 
     def generate_races_run(self, main_info):
         return f"<div id=\"races-run\"><b>Races run:</b> {main_info['races_run']}</div>"
+
+    def generate_average_training_value(self, main_info):
+        average = main_info.get('average_training_value')
+        if average is None:
+            # No training run yet this career - nothing to average.
+            return ""
+        if average > constants.TRAINING_VALUE_TARGET_HIGH:
+            color = "#7bed9f"   # green: better than target
+        elif average < constants.TRAINING_VALUE_TARGET_LOW:
+            color = "#FFAD1E"   # orange: below target
+        else:
+            color = "#FFFFFF"   # white: on target
+        return (f"<div id=\"average-training-value\"><b>Average Training Value:</b> "
+                f"<span style=\"color:{color};font-weight:bold;\">{average:.2f}</span></div>")
 
     def generate_event_choices(self, main_info):
         events = main_info.get('event_choices') or []

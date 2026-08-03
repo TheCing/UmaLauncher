@@ -725,6 +725,14 @@ class CarrotJuicer:
 
         self.previous_request = data
 
+        # command_type 1 is a training; score it against the board the helper
+        # last displayed, for the average-training-value counter.
+        if data.get('command_type') == 1 and 'command_id' in data:
+            try:
+                self.helper_table.record_training_choice(data['command_id'])
+            except Exception:
+                logger.warning(f"Could not record training choice:\n{traceback.format_exc()}")
+
         try:
             if 'attestation_type' in data:
                 mdb.update_mdb_cache()

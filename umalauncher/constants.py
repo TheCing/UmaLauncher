@@ -220,6 +220,18 @@ BOND_COLOR_DICT = {
     100: "#FFEB78"
 }
 
+# Training Value scoring. The bond cutoff is the start of the orange band
+# above: partners at or past it no longer earn useful bond, so only those
+# below score a point.
+BOND_ORANGE_CUTOFF = 80
+HINT_TRAINING_VALUE = 0.5
+LIGHT_HELLO_TRAINING_VALUE = 0.5
+GRAND_LIVE_SCENARIO_ID = 3
+# The average-training-value counter reads white inside this band,
+# green above it, orange below it.
+TRAINING_VALUE_TARGET_LOW = 2.4
+TRAINING_VALUE_TARGET_HIGH = 2.6
+
 UAF_COLOR_DICT = {
     "1": "rgba(0, 0, 255, 0.1)",
     "2": "rgba(255, 0, 0, 0.1)",
