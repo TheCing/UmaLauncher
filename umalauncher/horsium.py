@@ -9,6 +9,7 @@ import os
 import shutil
 import traceback
 import threading
+import time
 from urllib.parse import urlparse
 from subprocess import CREATE_NO_WINDOW
 
@@ -28,6 +29,12 @@ import util
 
 # Threads currently quitting replaced/hung drivers; joined at shutdown.
 _PENDING_QUIT_THREADS = []
+
+# When a browser can't start at all, every packet would otherwise trigger
+# another launch attempt - each one flashing a window on screen and, every
+# third try, a modal error box. Back off instead of retrying forever.
+MAX_CONSECUTIVE_LAUNCH_FAILURES = 3
+LAUNCH_FAILURE_COOLDOWN_SECONDS = 120
 
 FIREFOX_FORCED_PREFS = {
     "security.fileuri.strict_origin_policy": False,  # Disable CORS protections
@@ -240,11 +247,19 @@ class BrowserWindow:
         # both the CarrotJuicer thread and the Flask (umaserver) thread. RLock
         # because locked methods call each other (ensure_focus -> ensure_tab_open).
         self._driver_lock = threading.RLock()
+        self._consecutive_launch_failures = 0
+        self._launch_blocked_until = 0.0
+        self._reported_launch_failure = False
 
         self.ensure_tab_open()
 
     def init_browser(self) -> RemoteWebDriver:
         driver = None
+
+        remaining_cooldown = self._launch_blocked_until - time.monotonic()
+        if remaining_cooldown > 0:
+            logger.debug(f"Browser launch backing off for another {remaining_cooldown:.0f}s")
+            return None
 
         if self.settings['enable_browser_override']:
             selection = self.settings['custom_browser_type']
@@ -278,8 +293,16 @@ class BrowserWindow:
                 logger.error("Failed to start browser")
                 logger.error(traceback.format_exc())
                 self.latest_error = traceback.format_exception_only(type(e), e)[-1]
-        # if not driver:
-        #     util.show_warning_box("Uma Launcher: Unable to start browser.", "Selected webbrowser cannot be started.")
+        if driver:
+            self._consecutive_launch_failures = 0
+            self._reported_launch_failure = False
+        else:
+            self._consecutive_launch_failures += 1
+            if self._consecutive_launch_failures >= MAX_CONSECUTIVE_LAUNCH_FAILURES:
+                self._launch_blocked_until = time.monotonic() + LAUNCH_FAILURE_COOLDOWN_SECONDS
+                self._consecutive_launch_failures = 0
+                logger.error(f"Browser failed to start {MAX_CONSECUTIVE_LAUNCH_FAILURES} times in a row; "
+                             f"pausing launch attempts for {LAUNCH_FAILURE_COOLDOWN_SECONDS}s")
 
         if driver:
             # A hung page or script must raise instead of blocking the calling
@@ -375,7 +398,13 @@ class BrowserWindow:
                     if self.driver:
                         return func(self, *args, **kwargs)
 
-            util.show_warning_box("Uma Launcher: Unable to reach browser.", f"Webbrowser is unable to open.<br><br>If this problem persists, try restarting your computer<br>or selecting a different browser in the preferences.<br><br>Extra info:<br>{self.latest_error}")
+                # Report once per outage, not once per call - this runs off
+                # packet handling, so it used to stack modal boxes forever.
+                already_reported = self._reported_launch_failure
+                self._reported_launch_failure = True
+
+            if not already_reported:
+                util.show_warning_box("Uma Launcher: Unable to reach browser.", f"Webbrowser is unable to open.<br><br>If this problem persists, try restarting your computer<br>or selecting a different browser in the preferences.<br><br>Extra info:<br>{self.latest_error}")
         return wrapper
 
     def get_browser_pid(self):
