@@ -3,6 +3,7 @@
 # and, in the case of multiple windows, which one is the one we want to use
 # Each open window will be an instance of a custom class.
 # Interacting with the browser will be done through this class.
+import hashlib
 import json
 import os
 import traceback
@@ -24,7 +25,6 @@ from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.common.exceptions import NoSuchWindowException
 import util
-import socket
 
 OLD_DRIVERS = []
 
@@ -65,13 +65,6 @@ def set_browser_version(options: ArgOptions, settings):
     if not settings['browser_version'] or not settings['browser_version'].strip():
         return
     options.browser_version = settings['browser_version']
-
-def _is_port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.15) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
 
 def firefox_setup(helper_url, settings):
     driver_path = None
@@ -121,7 +114,7 @@ def firefox_setup(helper_url, settings):
     browser.get(helper_url)
     return browser
 
-def chromium_setup(service, options_class, driver_class, profile, helper_url, settings, binary_path=None, base_port=9222, max_port=9229):
+def chromium_setup(service, options_class, driver_class, profile, helper_url, settings, binary_path=None):
     service.creation_flags = CREATE_NO_WINDOW
     options = options_class()
     set_browser_version(options, settings)
@@ -129,33 +122,28 @@ def chromium_setup(service, options_class, driver_class, profile, helper_url, se
     if binary_path:
         options.binary_location = binary_path
 
-    # Find first free port
-    for port in range(base_port, max_port):
-        if not _is_port_open(port):
-            break
-    else:
-        raise RuntimeError(f"No free debug port available between {base_port} and {max_port}")
+    # A user-data-dir can only be held by one running Chromium instance, and the
+    # helper and skills windows are separate instances that may run at once, so
+    # give each window its own dir keyed on its URL. Key on netloc+path only:
+    # the helper URL's query string encodes the deck and changes every career,
+    # and hashing it would spawn a fresh profile per run.
+    parsed_url = urlparse(helper_url)
+    url_slug = hashlib.md5(f"{parsed_url.netloc}{parsed_url.path}".encode("utf-8")).hexdigest()[:8]
+    per_window_profile = f"{profile}_{url_slug}"
 
-    # Use per-port profile folder to avoid conflicts if same profile used multiple times
-    per_port_profile = profile + f"_p{port}"
-
-    options.add_argument(f"--user-data-dir={per_port_profile}")
-    options.add_argument(f"--remote-debugging-port={port}")
-    options.add_experimental_option("useAutomationExtension", False) # Disable browser being controlled warning
+    options.add_argument(f"--user-data-dir={per_window_profile}")
     options.add_experimental_option("excludeSwitches", ["enable-automation"]) # Disable browser being controlled warning
-    options.add_argument('disable-infobars')
     options.add_argument("--disable-web-security") # Disable CORS protections
-    
+
     if not settings['enable_browser_override']:
         options.add_argument("--app=" + helper_url)
 
     browser = driver_class(service=service, options=options)
-    
+
     if settings['enable_browser_override']:
         browser.get(helper_url)
 
-
-    logger.debug(f"Chromium started on debug port {port} using profile {per_port_profile}")
+    logger.debug(f"Chromium started using profile {per_window_profile}")
     return browser
 
 def chrome_setup(helper_url, settings):
