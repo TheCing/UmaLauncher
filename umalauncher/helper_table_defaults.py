@@ -461,6 +461,18 @@ class GrandMastersFragmentsSettings(se.NewSettings):
             "#90EE90",
             se.SettingType.COLOR
         ),
+        "highlight_progenitors": se.Setting(
+            "Highlight Progenitors and Guides",
+            "Highlights facilities where SSR Progenitors and Guides is present (only when the card is in your support deck).",
+            True,
+            se.SettingType.BOOL
+        ),
+        "highlight_progenitors_color": se.Setting(
+            "Highlight Progenitors and Guides color",
+            "The color to use to highlight facilities where SSR Progenitors and Guides is present.",
+            "#FFD700",
+            se.SettingType.COLOR
+        ),
     }
 
 class GrandMastersFragmentsRow(hte.Row):
@@ -489,7 +501,13 @@ class GrandMastersFragmentsRow(hte.Row):
             
             cell_text += "</div>"
 
-            cells.append(hte.Cell(cell_text, bold=True, color=self.settings.double_color.value))
+            # Highlight for training with SSR Progenitors and Guides
+            if self.settings.highlight_progenitors.value and command.get('has_progenitors_and_guides'):
+                cell_color = self.settings.highlight_progenitors_color.value
+            else:
+                cell_color = self.settings.double_color.value
+
+            cells.append(hte.Cell(cell_text, bold=True, color=cell_color))
 
         return cells
     

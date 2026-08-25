@@ -648,6 +648,8 @@ class HelperTable():
             sub_orange_bond_count = 0
             # True only when SSR Light Hello (30052) from the support deck is on this facility.
             has_ssr_light_hello = False
+            # True only when SSR Progenitors and Guides (30137) is on this facility.
+            has_progenitors_and_guides = False
             num_hints = len(command.get('tips_event_partner_array', []))
             if num_hints:
                 hint_partners += command.get('tips_event_partner_array')
@@ -683,6 +685,10 @@ class HelperTable():
                     # SSR Light Hello (Grand Live)
                     if support_id == 30052:
                         has_ssr_light_hello = True
+
+                    # SSR Progenitors and Guides (Grand Masters)
+                    if support_id == 30137:
+                        has_progenitors_and_guides = True
 
                 elif training_partner_id > 1000:  # TODO: Maybe 1000 < training_partner_id < 9000
                     useful_partner_count += 1
@@ -921,6 +927,7 @@ class HelperTable():
                 'feeling_turn_array': feeling_turn_array,
                 'feeling_turn_info_array': feeling_turn_info_array,
                 'has_ssr_light_hello': has_ssr_light_hello,
+                'has_progenitors_and_guides': has_progenitors_and_guides,
                 'training_value': training_value,
                 'command_id': command['command_id'],
             }
