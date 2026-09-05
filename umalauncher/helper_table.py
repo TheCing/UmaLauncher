@@ -486,13 +486,16 @@ class HelperTable():
         
 
         # Project L'Arc
+        # NOTE: these scenario arrays can be present-but-null in real packets,
+        # so `or []` is load-bearing here - dict.get's default only applies
+        # when the key is absent, not when its stored value is None.
         arc_charas = {}
         arc_beginning_or_overseas = False
         if 'arc_data_set' in data:
-            for arc_chara in data['arc_data_set'].get('arc_rival_array', []):
+            for arc_chara in (data['arc_data_set'].get('arc_rival_array') or []):
                 arc_charas[arc_chara['chara_id']] = arc_chara
 
-            for command in data['arc_data_set'].get('command_info_array', []):
+            for command in (data['arc_data_set'].get('command_info_array') or []):
                 if command['command_id'] in all_commands:
                     all_commands[command['command_id']]['add_global_exp'] = command['add_global_exp']
 
@@ -502,8 +505,8 @@ class HelperTable():
                 arc_beginning_or_overseas = False
                 all_commands["ss_match"] = {
                     'command_id': "ss_match",
-                    'params_inc_dec_info_array': data['arc_data_set'].get('selection_info', []).get('params_inc_dec_info_array', []) + \
-                                                 data['arc_data_set'].get('selection_info', []).get('bonus_params_inc_dec_info_array', [])
+                    'params_inc_dec_info_array': ((data['arc_data_set'].get('selection_info') or {}).get('params_inc_dec_info_array') or []) + \
+                                                 ((data['arc_data_set'].get('selection_info') or {}).get('bonus_params_inc_dec_info_array') or [])
                 }
 
             for row in self.selected_preset:
@@ -718,7 +721,7 @@ class HelperTable():
             if 'team_data_set' in data:
                 for partner_id  in command.get('guide_event_partner_array', []):
                     # find partner in the evaluation_info_array
-                    entry = next((d for d in data['team_data_set'].get('evaluation_info_array') if d["target_id"] == partner_id ), None)
+                    entry = next((d for d in (data['team_data_set'].get('evaluation_info_array') or []) if d["target_id"] == partner_id ), None)
 
                     # "Useful" is count of partners not yet exploded
                     if entry.get("soul_event_state") == 0:
@@ -814,11 +817,11 @@ class HelperTable():
             uaf_consultations_left = 0
             
             if 'sport_data_set' in data:
-                sport_levels = data['sport_data_set'].get('training_array', [])
+                sport_levels = (data['sport_data_set'].get('training_array') or [])
                 uaf_sport_rank = {item['command_id']: item['sport_rank'] for item in sport_levels}
-                uaf_sport_compeition_win = data['sport_data_set'].get('competition_result_array', [])
+                uaf_sport_compeition_win = (data['sport_data_set'].get('competition_result_array') or [])
                 
-                uaf_active_effects = data['sport_data_set'].get('compe_effect_id_array', [])
+                uaf_active_effects = (data['sport_data_set'].get('compe_effect_id_array') or [])
                 uaf_effects = mdb.get_uaf_training_effects()
                 
                 for effect_id in uaf_active_effects:
@@ -840,7 +843,7 @@ class HelperTable():
                 
                 uaf_sport_competition = f"{group_counts['1']}/{group_counts['2']}/{group_counts['3']}"
 
-                uaf_consultations_left = len(data['sport_data_set'].get('item_id_array', []))
+                uaf_consultations_left = len((data['sport_data_set'].get('item_id_array') or []))
                 
                 uaf_required_rank_for_turn = mdb.get_uaf_required_rank_for_turn()
                 uaf_required_rank_for_turn.sort(key=lambda x: x[0], reverse=1)
