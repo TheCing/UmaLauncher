@@ -1612,6 +1612,85 @@ class RamenExpertiseRow(hte.Row):
         td3 = ''.join(cell.to_td() for cell in self.generate_row_cells(game_state, '3'))
         return f'<tr>{td1}</tr><tr>{td2}</tr><tr>{td3}</tr>'
 
+class RamenTotalIngredientsSettings(se.NewSettings):
+    _settings = {
+        "highlight_max": se.Setting(
+            "Highlight highest total",
+            "Highlights the facility with the highest total ingredients.",
+            True,
+            se.SettingType.BOOL
+        ),
+        "highlight_color": se.Setting(
+            "Highlight color",
+            "The color to use to highlight the highest total.",
+            "#90EE90",
+            se.SettingType.COLOR
+        ),
+        "count_overflow": se.Setting(
+            "Count wasted overflow",
+            "Count ingredients gained beyond what the expertise needs to level up.<br>"
+            "Off by default: the game discards overflow (the counter always resets to a "
+            "full level), so it is not real progress.",
+            False,
+            se.SettingType.BOOL
+        ),
+    }
+
+
+class RamenTotalIngredientsRow(hte.Row):
+    long_name = "Ramen total ingredients"
+    short_name = "Total Ingreds"
+    description = ("[Scenario-specific] Total of all three ramen ingredients (Noodles, Stock,\n"
+                   "Toppings) gained on each facility. Hidden in other scenarios.")
+
+    FEELING_IDS = (1, 2, 3)
+
+    def __init__(self):
+        super().__init__()
+        self.settings = RamenTotalIngredientsSettings()
+
+    def _facility_total(self, command_data):
+        total = 0
+        for feeling_id in self.FEELING_IDS:
+            gain = next((x['turn'] for x in command_data['feeling_turn_array']
+                         if x['feeling_id'] == feeling_id), 0)
+            if self.settings.count_overflow.value:
+                total += gain
+            else:
+                # Anything past remain_turn is discarded when the expertise
+                # levels up, so only count what actually lands.
+                remain = next((x['remain_turn'] for x in command_data['feeling_turn_info_array']
+                               if x['feeling_id'] == feeling_id), 0)
+                total += min(gain, remain)
+        return total
+
+    def _generate_cells(self, game_state) -> list[hte.Cell]:
+        if list(game_state.values())[0]['scenario_id'] != 14:
+            return []
+
+        cells = [hte.Cell(self.short_name, title=self.description)]
+
+        totals = [self._facility_total(cd) for cd in game_state.values()]
+        max_total = max(totals) if totals else 0
+
+        for total in totals:
+            highlight = (self.settings.highlight_max.value
+                         and total == max_total and total > 0)
+            cells.append(hte.Cell(total, bold=highlight,
+                                  color=self.settings.highlight_color.value if highlight else None))
+
+        return cells
+
+    def to_tr(self, game_state):
+        if list(game_state.values())[0]['scenario_id'] != 14:
+            return ""
+        # Same guard as the Expertise row: no ingredient data during the finale.
+        for command_data in game_state.values():
+            if not command_data.get('feeling_turn_array') or not command_data.get('feeling_turn_info_array'):
+                return ""
+        return super().to_tr(game_state)
+
+
 def generate_div(member):
     cell_text = "<div style=\"display: flex; flex-direction: column; align-items: center; justify-content: center;\">"
     chara_id = member['chara_id']
@@ -1696,6 +1775,7 @@ class RowTypes(Enum):
     DREAM_PARTNERS = DreamsPartnersRow
     DP_GAIN = DreamPointsRow
     RAMEN_EXPERTISE = RamenExpertiseRow
+    RAMEN_TOTAL_INGREDIENTS = RamenTotalIngredientsRow
 
 
 class DefaultPreset(hte.Preset):
