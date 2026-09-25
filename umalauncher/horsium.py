@@ -24,8 +24,14 @@ from selenium.webdriver.remote.webdriver import WebDriver as RemoteWebDriver
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.common.exceptions import NoSuchWindowException
+from urllib3.exceptions import HTTPError as Urllib3HTTPError
 import util
+
+# "The driver can't be talked to." A dead driver *process* never gets as far
+# as a WebDriverException: selenium's HTTP client fails to connect and raises
+# urllib3's MaxRetryError (a urllib3 HTTPError) or a socket ConnectionError.
+# Catching only WebDriverException let those escape and crash the launcher.
+DRIVER_UNREACHABLE_ERRORS = (WebDriverException, Urllib3HTTPError, ConnectionError)
 
 # Threads currently quitting replaced/hung drivers; joined at shutdown.
 _PENDING_QUIT_THREADS = []
@@ -183,7 +189,7 @@ def _apply_firefox_adblock(browser, settings):
         else:
             try:
                 browser.uninstall_addon(UBLOCK_ADDON_ID)
-            except WebDriverException:
+            except DRIVER_UNREACHABLE_ERRORS:
                 pass  # not installed - nothing to remove
     except Exception:
         logger.warning(f"Could not apply adblock setting:\n{traceback.format_exc()}")
@@ -411,7 +417,7 @@ class BrowserWindow:
             try:
                 driver.set_page_load_timeout(30)
                 driver.set_script_timeout(20)
-            except WebDriverException:
+            except DRIVER_UNREACHABLE_ERRORS:
                 logger.warning(f"Could not set driver timeouts:\n{traceback.format_exc()}")
         return driver
 
@@ -421,7 +427,7 @@ class BrowserWindow:
                 return False
             try:
                 return self.active_tab_handle in self.driver.window_handles
-            except WebDriverException:
+            except DRIVER_UNREACHABLE_ERRORS:
                 return False
 
     def _reuse_existing_tab(self):
@@ -455,7 +461,7 @@ class BrowserWindow:
                 try:
                     if self._reuse_existing_tab():
                         return
-                except WebDriverException:
+                except DRIVER_UNREACHABLE_ERRORS:
                     logger.warning(f"Browser session unusable, replacing it:\n{traceback.format_exc()}")
                     # Quit off-thread: a dead session's quit() can block on the
                     # wire, and this path runs inside packet handling.
@@ -467,7 +473,7 @@ class BrowserWindow:
             try:
                 if not self.driver or not self.driver.window_handles:
                     return
-            except WebDriverException:
+            except DRIVER_UNREACHABLE_ERRORS:
                 logger.error("Failed to get window handles")
                 logger.error(traceback.format_exc())
                 return
@@ -550,7 +556,7 @@ class BrowserWindow:
                     self.driver.switch_to.window(self.active_tab_handle)
                     self.last_window_rect = self.driver.get_window_rect()
                     self.driver.close()
-            except (NoSuchWindowException, WebDriverException):
+            except DRIVER_UNREACHABLE_ERRORS:
                 pass
 
     def quit(self):
@@ -565,7 +571,7 @@ def quit_one_driver(driver):
     if driver:
         try:
             driver.quit()
-        except (NoSuchWindowException, WebDriverException):
+        except DRIVER_UNREACHABLE_ERRORS:
             pass
     logger.debug(f"Finished closing driver in thread {threading.get_ident()}")
 
